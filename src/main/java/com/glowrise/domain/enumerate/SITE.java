@@ -1,7 +1,7 @@
 package com.glowrise.domain.enumerate;
 
 public enum SITE {
-    GLOWRISE,
+    LOCAL,
     NAVER,
     GOOGLE,
     KAKAO,
