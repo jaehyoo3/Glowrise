@@ -35,4 +35,8 @@ public class User extends AbstractAuditingEntity<Long> {
     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private Blog blog;
 
+    private String accessToken;
+
+    private String refreshToken;
+
 }

@@ -4,6 +4,7 @@ import com.glowrise.config.jwt.CustomOAuth2UserService;
 import com.glowrise.config.jwt.CustomSuccessHandler;
 import com.glowrise.config.jwt.JWTFilter;
 import com.glowrise.config.jwt.JWTUtil;
+import com.glowrise.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,7 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CustomSuccessHandler customSuccessHandler;
     private final JWTUtil jwtUtil;
+    private final UserRepository userRepository; // 추가
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -38,12 +40,12 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
-                .addFilterAfter(new JWTFilter(jwtUtil), UsernamePasswordAuthenticationFilter.class)
+                .addFilterAfter(new JWTFilter(jwtUtil,userRepository), UsernamePasswordAuthenticationFilter.class)
                 .oauth2Login(oauth2 -> oauth2.userInfoEndpoint(userInfoEndpointConfig ->
                                 userInfoEndpointConfig.userService(customOAuth2UserService))
                         .successHandler(customSuccessHandler))
                 .authorizeHttpRequests(authorizeRequests ->
-                        authorizeRequests.requestMatchers("/h2-console/**", "/","signup", "/login","/logout").permitAll()
+                        authorizeRequests.requestMatchers("/h2-console/**", "/", "/signup", "/login", "/logout", "/api/auth/**").permitAll()
                                 .anyRequest().authenticated())
                 .headers(httpSecurityHeadersConfigurer ->
                         httpSecurityHeadersConfigurer.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))

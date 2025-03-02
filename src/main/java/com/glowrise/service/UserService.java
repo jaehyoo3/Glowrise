@@ -11,6 +11,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -38,8 +41,8 @@ public class UserService {
         return responseDto;
     }
 
-    // 일반 로그인
-    public String login(UserDTO dto) {
+    // 일반 로그인 (액세스 토큰과 리프레시 토큰 반환)
+    public Map<String, String> login(UserDTO dto) {
         User user = userRepository.findByEmail(dto.getEmail());
         if (user == null) {
             throw new RuntimeException("사용자를 찾을 수 없습니다");
@@ -49,7 +52,21 @@ public class UserService {
             throw new RuntimeException("비밀번호가 일치하지 않습니다");
         }
 
-        return jwtUtil.generateToken(user.getEmail(), user.getRole().name(), 60 * 60 * 60L);
+        // 액세스 토큰과 리프레시 토큰 생성
+        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getRole().name(), 60 * 60 * 1000L); // 1시간
+        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername(), 7 * 24 * 60 * 60 * 1000L); // 7일
+
+        // User 엔티티에 토큰 저장
+        user.setAccessToken(accessToken);
+        user.setRefreshToken(refreshToken);
+        userRepository.save(user);
+
+        // 클라이언트에 두 토큰 반환
+        Map<String, String> tokens = new HashMap<>();
+        tokens.put("accessToken", accessToken);
+        tokens.put("refreshToken", refreshToken);
+
+        return tokens;
     }
 
     // 사용자 정보 조회
@@ -86,6 +103,36 @@ public class UserService {
         return responseDto;
     }
 
+    // 리프레시 토큰을 사용한 토큰 갱신 (선택적)
+    public Map<String, String> refreshToken(String refreshToken) {
+        if (refreshToken == null || jwtUtil.isExpired(refreshToken)) {
+            throw new RuntimeException("유효하지 않거나 만료된 리프레시 토큰입니다");
+        }
+
+        String username = jwtUtil.getUsername(refreshToken);
+        User user = findUserByUsername(username);
+
+        if (!refreshToken.equals(user.getRefreshToken())) {
+            throw new RuntimeException("리프레시 토큰이 일치하지 않습니다");
+        }
+
+        // 새로운 액세스 토큰과 리프레시 토큰 생성
+        String newAccessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getRole().name(), 60 * 60 * 1000L);
+        String newRefreshToken = jwtUtil.generateRefreshToken(user.getUsername(), 7 * 24 * 60 * 60 * 1000L);
+
+        // User 엔티티에 저장
+        user.setAccessToken(newAccessToken);
+        user.setRefreshToken(newRefreshToken);
+        userRepository.save(user);
+
+        // 새로운 토큰 반환
+        Map<String, String> tokens = new HashMap<>();
+        tokens.put("accessToken", newAccessToken);
+        tokens.put("refreshToken", newRefreshToken);
+
+        return tokens;
+    }
+
     // 중복 체크 메서드
     private void validateDuplicateUsername(String username) {
         if (userRepository.findByUsername(username) != null) {
@@ -108,4 +155,3 @@ public class UserService {
         return user;
     }
 }
-

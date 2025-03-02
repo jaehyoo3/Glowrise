@@ -1,6 +1,8 @@
 package com.glowrise.config.jwt;
 
 import com.glowrise.config.jwt.dto.CustomOAuthUser;
+import com.glowrise.domain.User;
+import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.UserDTO;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -21,17 +23,21 @@ import java.io.IOException;
 public class JWTFilter extends OncePerRequestFilter {
 
     private final JWTUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        String authorization = null;
+        String accessToken = null;
+        String refreshToken = null;
         Cookie[] cookies = request.getCookies();
 
         if (cookies != null) {
             for (Cookie cookie : cookies) {
                 if (cookie.getName().equals("Authorization")) {
-                    authorization = cookie.getValue();
-                    break;
+                    accessToken = cookie.getValue();
+                }
+                if (cookie.getName().equals("RefreshToken")) {
+                    refreshToken = cookie.getValue();
                 }
             }
         }
@@ -42,13 +48,30 @@ public class JWTFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (authorization == null || jwtUtil.isExpired(authorization)) {
-            filterChain.doFilter(request, response);
-            return;
+        // 액세스 토큰이 없거나 만료된 경우
+        if (accessToken == null || jwtUtil.isExpired(accessToken)) {
+            if (refreshToken != null && !jwtUtil.isExpired(refreshToken)) {
+                // 리프레시 토큰이 유효하면 새로운 액세스 토큰 발급
+                String username = jwtUtil.getUsername(refreshToken);
+                User userEntity = userRepository.findByUsername(username);
+                if (userEntity != null && userEntity.getRefreshToken().equals(refreshToken)) {
+                    String role = userEntity.getRole().name();
+                    accessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L);
+                    userEntity.setAccessToken(accessToken);
+                    userRepository.save(userEntity);
+
+                    // 새로운 액세스 토큰을 쿠키에 설정
+                    response.addCookie(createCookie("Authorization", accessToken));
+                }
+            } else {
+                filterChain.doFilter(request, response);
+                return;
+            }
         }
 
-        String username = jwtUtil.getUsername(authorization);
-        String role = jwtUtil.getRole(authorization);
+        // 유효한 액세스 토큰으로 인증 설정
+        String username = jwtUtil.getUsername(accessToken);
+        String role = jwtUtil.getRole(accessToken);
 
         UserDTO userDTO = new UserDTO();
         userDTO.setUsername(username);
@@ -59,5 +82,13 @@ public class JWTFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(auth);
 
         filterChain.doFilter(request, response);
+    }
+
+    private Cookie createCookie(String key, String value) {
+        Cookie cookie = new Cookie(key, value);
+        cookie.setMaxAge(60 * 60 * 60);
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        return cookie;
     }
 }

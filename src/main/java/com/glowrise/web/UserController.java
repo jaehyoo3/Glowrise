@@ -10,10 +10,9 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @Controller
 @RequiredArgsConstructor
@@ -34,16 +33,15 @@ public class UserController {
 
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody UserDTO dto) {
-        String token = userService.login(dto);
-        ResponseCookie cookie = ResponseCookie.from("Authorization", token)
-                .maxAge(60 * 60 * 60)
-                .path("/")
-                .httpOnly(true)
-                .build();
-        return ResponseEntity.ok()
-                .header(HttpHeaders.SET_COOKIE, cookie.toString())
-                .body("로그인 성공");
+    public ResponseEntity<Map<String, String>> login(@RequestBody UserDTO dto) {
+        Map<String, String> tokens = userService.login(dto);
+        return ResponseEntity.ok(tokens);
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<Map<String, String>> refreshToken(@RequestParam String refreshToken) {
+        Map<String, String> tokens = userService.refreshToken(refreshToken);
+        return ResponseEntity.ok(tokens);
     }
 
     @GetMapping("/profile")
