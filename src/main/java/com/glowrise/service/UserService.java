@@ -41,34 +41,6 @@ public class UserService {
         return responseDto;
     }
 
-    // 일반 로그인 (액세스 토큰과 리프레시 토큰 반환)
-    public Map<String, String> login(UserDTO dto) {
-        User user = userRepository.findByEmail(dto.getEmail());
-        if (user == null) {
-            throw new RuntimeException("사용자를 찾을 수 없습니다");
-        }
-
-        if (!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
-            throw new RuntimeException("비밀번호가 일치하지 않습니다");
-        }
-
-        // 액세스 토큰과 리프레시 토큰 생성
-        String accessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getRole().name(), 60 * 60 * 1000L); // 1시간
-        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername(), 7 * 24 * 60 * 60 * 1000L); // 7일
-
-        // User 엔티티에 토큰 저장
-        user.setAccessToken(accessToken);
-        user.setRefreshToken(refreshToken);
-        userRepository.save(user);
-
-        // 클라이언트에 두 토큰 반환
-        Map<String, String> tokens = new HashMap<>();
-        tokens.put("accessToken", accessToken);
-        tokens.put("refreshToken", refreshToken);
-
-        return tokens;
-    }
-
     // 사용자 정보 조회
     public UserDTO getUserProfile(String username) {
         User user = findUserByUsername(username);

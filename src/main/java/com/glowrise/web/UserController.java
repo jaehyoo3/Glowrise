@@ -31,13 +31,6 @@ public class UserController {
         }
     }
 
-
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestBody UserDTO dto) {
-        Map<String, String> tokens = userService.login(dto);
-        return ResponseEntity.ok(tokens);
-    }
-
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, String>> refreshToken(@RequestParam String refreshToken) {
         Map<String, String> tokens = userService.refreshToken(refreshToken);

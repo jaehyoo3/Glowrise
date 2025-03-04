@@ -11,12 +11,33 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 @Component
-@RequiredArgsConstructor
 public class JWTUtil {
     private SecretKey secretKey;
 
     public JWTUtil(@Value("${spring.jwt.secret}") String secret) {
+        if (secret == null || secret.trim().isEmpty()) {
+            throw new IllegalArgumentException("JWT secret key cannot be null or empty. Please set 'spring.jwt.secret' in application.properties");
+        }
         secretKey = new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), Jwts.SIG.HS256.key().build().getAlgorithm());
+    }
+
+    public String generateAccessToken(String username, String role, Long expiredMs) {
+        return Jwts.builder()
+                .claim("username", username)
+                .claim("role", role)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expiredMs))
+                .signWith(secretKey)
+                .compact();
+    }
+
+    public String generateRefreshToken(String username, Long expiredMs) {
+        return Jwts.builder()
+                .claim("username", username)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expiredMs))
+                .signWith(secretKey)
+                .compact();
     }
 
     public String getUsername(String token) {
@@ -29,26 +50,5 @@ public class JWTUtil {
 
     public Boolean isExpired(String token) {
         return Jwts.parser().verifyWith(secretKey).build().parseSignedClaims(token).getPayload().getExpiration().before(new Date());
-    }
-
-    // 액세스 토큰 생성 (기존 메서드)
-    public String generateAccessToken(String username, String role, Long expiredMs) {
-        return Jwts.builder()
-                .claim("username", username)
-                .claim("role", role)
-                .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiredMs))
-                .signWith(secretKey)
-                .compact();
-    }
-
-    // 리프레시 토큰 생성 (새로운 메서드)
-    public String generateRefreshToken(String username, Long expiredMs) {
-        return Jwts.builder()
-                .claim("username", username)
-                .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + expiredMs))
-                .signWith(secretKey)
-                .compact();
     }
 }

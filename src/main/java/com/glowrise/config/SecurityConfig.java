@@ -8,6 +8,8 @@ import com.glowrise.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 
@@ -26,8 +28,7 @@ public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CustomSuccessHandler customSuccessHandler;
-    private final JWTUtil jwtUtil;
-    private final UserRepository userRepository; // 추가
+    private final JWTFilter jwtFilter; // 주입받음
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -38,14 +39,21 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
-                .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
-                .addFilterAfter(new JWTFilter(jwtUtil,userRepository), UsernamePasswordAuthenticationFilter.class)
-                .oauth2Login(oauth2 -> oauth2.userInfoEndpoint(userInfoEndpointConfig ->
+                .addFilterAfter(jwtFilter, UsernamePasswordAuthenticationFilter.class) // 주입받은 빈 사용
+                .formLogin(form -> form
+                        .loginProcessingUrl("/login") // 로그인 요청 URL
+                        .usernameParameter("email")   // 이메일 필드 이름 설정
+                        .passwordParameter("password") // 비밀번호 필드 이름 (기본값이지만 명시)
+                        .successHandler(customSuccessHandler)
+                        .permitAll())
+                .oauth2Login(oauth2 -> oauth2
+                        .userInfoEndpoint(userInfoEndpointConfig ->
                                 userInfoEndpointConfig.userService(customOAuth2UserService))
                         .successHandler(customSuccessHandler))
                 .authorizeHttpRequests(authorizeRequests ->
-                        authorizeRequests.requestMatchers("/h2-console/**", "/", "/signup", "/login", "/logout", "/api/auth/**").permitAll()
+                        authorizeRequests
+                                .requestMatchers("/h2-console/**", "/", "/signup", "/login", "/logout", "/api/auth/**").permitAll()
                                 .anyRequest().authenticated())
                 .headers(httpSecurityHeadersConfigurer ->
                         httpSecurityHeadersConfigurer.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
@@ -53,4 +61,8 @@ public class SecurityConfig {
                 .build();
     }
 
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
+        return authenticationConfiguration.getAuthenticationManager();
+    }
 }
