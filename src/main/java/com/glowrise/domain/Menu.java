@@ -2,6 +2,7 @@ package com.glowrise.domain;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.List;
 @Entity
 @Table(name = "menu")
 @Getter
+@Setter
 public class Menu extends AbstractAuditingEntity<Long> {
 
     @Id

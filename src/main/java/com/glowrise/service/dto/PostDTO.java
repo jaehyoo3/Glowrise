@@ -19,4 +19,6 @@ public class PostDTO {
     private Long userId;
 
     private List<Long> commentsId = new ArrayList<>();
+    private List<Long> fileIds = new ArrayList<>(); // 첨부된 파일 ID 목록
+
 }

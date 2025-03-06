@@ -2,6 +2,7 @@ package com.glowrise.domain;
 
 import jakarta.persistence.*;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -9,6 +10,7 @@ import java.util.List;
 @Entity
 @Table(name = "post")
 @Getter
+@Setter
 public class Post extends AbstractAuditingEntity<Long> {
 
     @Id
@@ -31,5 +33,8 @@ public class Post extends AbstractAuditingEntity<Long> {
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Comment> comments = new ArrayList<>();
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<Files> files = new ArrayList<>(); // 게시글에 첨부된 파일들
 
 }
