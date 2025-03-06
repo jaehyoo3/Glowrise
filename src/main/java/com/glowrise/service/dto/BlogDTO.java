@@ -11,4 +11,8 @@ public class BlogDTO {
 
     private String description;
 
+    private String url;
+
+    private Long userId;
+
 }
