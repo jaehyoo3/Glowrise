@@ -13,40 +13,50 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.Optional;
 
 @Controller
 @RequiredArgsConstructor
 public class UserController {
 
     private final UserService userService;
-    private final JWTUtil jwtUtil;
 
     @PostMapping("/signup")
-    public ResponseEntity<String> signUp(@RequestBody UserDTO dto) {
-        try {
-            userService.signUp(dto);
-            return ResponseEntity.ok("회원가입 성공");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("회원가입 실패: " + e.getMessage());
-        }
+    public ResponseEntity<UserDTO> signUp(@RequestBody UserDTO dto) throws Exception {
+        UserDTO createdUser = userService.signUp(dto);
+        return ResponseEntity.ok(createdUser);
     }
 
+    // 사용자 정보 조회
+    @GetMapping("/profile/{username}")
+    public ResponseEntity<UserDTO> getUserProfile(@PathVariable String username) throws Exception {
+        UserDTO userProfile = userService.getUserProfile(username);
+        return ResponseEntity.ok(userProfile);
+    }
+
+    // 사용자 정보 수정
+    @PutMapping("/profile/{username}")
+    public ResponseEntity<UserDTO> updateUserProfile(
+            @PathVariable String username,
+            @RequestBody UserDTO dto) throws Exception {
+        UserDTO updatedUser = userService.updateUserProfile(username, dto);
+        return ResponseEntity.ok(updatedUser);
+    }
+
+    // 부분 업데이트
+    @PatchMapping("/{id}")
+    public ResponseEntity<UserDTO> partialUpdateUser(@PathVariable Long id, @RequestBody UserDTO dto) throws Exception {
+        dto.setId(id);
+        Optional<UserDTO> updatedUser = userService.partialUpdateUser(dto);
+        return updatedUser.map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    // 리프레시 토큰을 사용한 토큰 갱신
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, String>> refreshToken(@RequestParam String refreshToken) {
+    public ResponseEntity<Map<String, String>> refreshToken(@RequestBody Map<String, String> request) throws Exception {
+        String refreshToken = request.get("refreshToken");
         Map<String, String> tokens = userService.refreshToken(refreshToken);
         return ResponseEntity.ok(tokens);
-    }
-
-    @GetMapping("/profile")
-    public ResponseEntity<UserDTO> getProfile(@AuthenticationPrincipal CustomOAuthUser user) {
-        UserDTO response = userService.getUserProfile(user.getName());
-        return ResponseEntity.ok(response);
-    }
-
-    @PutMapping("/profile")
-    public ResponseEntity<UserDTO> updateProfile(@AuthenticationPrincipal CustomOAuthUser user,
-                                                 @RequestBody UserDTO dto) {
-        UserDTO response = userService.updateUserProfile(user.getName(), dto);
-        return ResponseEntity.ok(response);
     }
 }
