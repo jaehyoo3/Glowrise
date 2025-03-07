@@ -48,19 +48,17 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String refreshToken = jwtUtil.generateRefreshToken(username, 7 * 24 * 60 * 60 * 1000L); // 7일
 
         // User 엔티티에 토큰 저장
-        User userEntity = userRepository.findByUsername(username);
-        if (userEntity != null) {
-            userEntity.setAccessToken(accessToken);
-            userEntity.setRefreshToken(refreshToken);
-            userRepository.save(userEntity);
-        }
+        User userEntity = userRepository.findByUsername(username).orElseThrow();
+        userEntity.setAccessToken(accessToken);
+        userEntity.setRefreshToken(refreshToken);
+        userRepository.save(userEntity);
 
         // 쿠키에 토큰 추가
         response.addCookie(createCookie("Authorization", accessToken));
         response.addCookie(createCookie("RefreshToken", refreshToken));
 
         // 리다이렉트 (필요 시 JSON 응답으로 변경 가능)
-        getRedirectStrategy().sendRedirect(request, response, "/");
+        getRedirectStrategy().sendRedirect(request, response, "http://localhost:3000/");
     }
 
     private Cookie createCookie(String key, String value) {

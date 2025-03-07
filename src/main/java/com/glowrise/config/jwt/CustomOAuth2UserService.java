@@ -28,44 +28,43 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
         String registrationId = request.getClientRegistration().getRegistrationId();
         OAuth2DTO oAuth2Response;
 
+        // OAuth2 제공자별 DTO 생성
         if (registrationId.equals("naver")) {
             oAuth2Response = new NaverDTO(oAuth2User.getAttributes());
         } else if (registrationId.equals("google")) {
             oAuth2Response = new GoogleDTO(oAuth2User.getAttributes());
         } else {
-            throw new OAuth2AuthenticationException("지원되지 않는 제공자입니다.");
+            throw new OAuth2AuthenticationException("지원되지 않는 제공자입니다: " + registrationId);
         }
 
         String username = oAuth2Response.getProvider() + " " + oAuth2Response.getProviderId();
-        User existData = userRepository.findByUsername(username);
 
-        if (existData == null) {
-            User userEntity = new User();
-            userEntity.setUsername(username);
+        // 사용자 조회 (Optional 사용)
+        User userEntity = userRepository.findByUsername(username)
+                .orElseGet(() -> {
+                    // 신규 사용자 생성
+                    User newUser = new User();
+                    newUser.setUsername(username);
+                    newUser.setEmail(oAuth2Response.getEmail());
+                    newUser.setNickName(oAuth2Response.getName());
+                    newUser.setRole(ROLE.ROLE_USER);
+                    newUser.setSite(registrationId.equals("naver") ? SITE.NAVER : SITE.GOOGLE);
+                    return userRepository.save(newUser);
+                });
+
+        // 기존 사용자 정보 업데이트
+        if (userEntity.getId() != null) { // 이미 저장된 경우
             userEntity.setEmail(oAuth2Response.getEmail());
             userEntity.setNickName(oAuth2Response.getName());
-            userEntity.setRole(ROLE.ROLE_USER);
-            userEntity.setSite(registrationId.equals("naver") ? SITE.NAVER : SITE.GOOGLE);
-
             userRepository.save(userEntity);
-
-            UserDTO userDTO = new UserDTO();
-            userDTO.setUsername(username);
-            userDTO.setNickName(oAuth2Response.getName());
-            userDTO.setRole(ROLE.ROLE_USER.name());
-
-            return new CustomOAuthUser(userDTO);
-        } else {
-            existData.setEmail(oAuth2Response.getEmail());
-            existData.setNickName(oAuth2Response.getName());
-            userRepository.save(existData);
-
-            UserDTO userDTO = new UserDTO();
-            userDTO.setUsername(existData.getUsername());
-            userDTO.setNickName(existData.getNickName());
-            userDTO.setRole(existData.getRole().name());
-
-            return new CustomOAuthUser(userDTO);
         }
+
+        // UserDTO 생성 및 반환
+        UserDTO userDTO = new UserDTO();
+        userDTO.setUsername(userEntity.getUsername());
+        userDTO.setNickName(userEntity.getNickName());
+        userDTO.setRole(userEntity.getRole().name());
+
+        return new CustomOAuthUser(userDTO);
     }
 }

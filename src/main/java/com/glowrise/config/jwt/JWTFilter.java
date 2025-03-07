@@ -53,8 +53,8 @@ public class JWTFilter extends OncePerRequestFilter {
             if (refreshToken != null && !jwtUtil.isExpired(refreshToken)) {
                 // 리프레시 토큰이 유효하면 새로운 액세스 토큰 발급
                 String username = jwtUtil.getUsername(refreshToken);
-                User userEntity = userRepository.findByUsername(username);
-                if (userEntity != null && userEntity.getRefreshToken().equals(refreshToken)) {
+                User userEntity = userRepository.findByUsername(username).orElseThrow();
+                if (userEntity.getRefreshToken().equals(refreshToken)) {
                     String role = userEntity.getRole().name();
                     accessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L);
                     userEntity.setAccessToken(accessToken);
