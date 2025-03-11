@@ -1,6 +1,6 @@
 package com.glowrise.config;
 
-import com.glowrise.domain.User;
+import org.springframework.security.core.userdetails.User; // 올바른 임포트
 import com.glowrise.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,12 +16,13 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
-        User user = userRepository.findByEmail(email).orElseThrow(); // 이메일로 조회
+        com.glowrise.domain.User user = userRepository.findByEmail(email) // 커스텀 User 엔티티
+                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + email));
 
-        String roleName = user.getRole().name().replace("ROLE_", ""); // "ROLE_" 접두어 제거
+        String roleName = user.getRole().name().replace("ROLE_", "");
 
-        return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getUsername()) // 인증 객체에는 username을 설정
+        // Spring Security 6.x.x의 User 빌더 사용
+        return User.withUsername(user.getUsername())
                 .password(user.getPassword())
                 .roles(roleName)
                 .build();

@@ -1,10 +1,10 @@
 package com.glowrise.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.glowrise.config.jwt.CustomOAuth2UserService;
 import com.glowrise.config.jwt.CustomSuccessHandler;
 import com.glowrise.config.jwt.JWTFilter;
-import com.glowrise.config.jwt.JWTUtil;
-import com.glowrise.repository.UserRepository;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,7 +24,9 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @EnableWebSecurity
 @Configuration
@@ -52,6 +54,15 @@ public class SecurityConfig {
                         .usernameParameter("email")   // 이메일 필드 이름 설정
                         .passwordParameter("password") // 비밀번호 필드 이름 (기본값이지만 명시)
                         .successHandler(customSuccessHandler)
+                        .failureHandler((request, response, exception) -> {
+                            response.setContentType("application/json");
+                            response.setCharacterEncoding("UTF-8");
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
+                            Map<String, String> error = new HashMap<>();
+                            error.put("error", "로그인 실패");
+                            error.put("message", exception.getMessage());
+                            response.getWriter().write(new ObjectMapper().writeValueAsString(error));
+                        })
                         .permitAll())
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfoEndpointConfig ->
