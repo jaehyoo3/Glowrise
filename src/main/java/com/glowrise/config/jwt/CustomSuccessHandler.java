@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-
 @Component
 @RequiredArgsConstructor
 public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
@@ -36,7 +35,7 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             username = userDetails.getUsername();
             role = authentication.getAuthorities().iterator().next().getAuthority();
         } else {
-            throw new IllegalStateException("지원 되지 않는 인증 유형입니다");
+            throw new IllegalStateException("지원되지 않는 인증 유형입니다");
         }
 
         String accessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L);
@@ -51,10 +50,11 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         response.addCookie(createCookie("Authorization", accessToken));
         response.addCookie(createCookie("RefreshToken", refreshToken));
 
-        Map<String, String> responseBody = new HashMap<>();
+        Map<String, Object> responseBody = new HashMap<>(); // String → Object로 변경
         responseBody.put("accessToken", accessToken);
         responseBody.put("refreshToken", refreshToken);
         responseBody.put("username", username);
+        responseBody.put("userId", userEntity.getId()); // userId 추가
         responseBody.put("message", "로그인 성공");
 
         response.setContentType("application/json");

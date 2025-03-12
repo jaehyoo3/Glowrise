@@ -178,8 +178,9 @@ export default {
         this.loginError = '';
         const response = await authService.login(this.loginForm.email, this.loginForm.password);
         console.log('로그인 성공:', response);
+        console.log('Stored User after login:', authService.getStoredUser());
         this.$emit('login-success');
-        this.$router.push('/'); // 클라이언트 측 라우팅
+        this.$router.push('/');
       } catch (error) {
         console.error('로그인 에러:', error);
         this.loginError = error.response?.data?.message || '로그인에 실패했습니다.';

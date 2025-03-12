@@ -25,6 +25,9 @@ public class Blog extends AbstractAuditingEntity<Long> {
     @JoinColumn(name = "user_id", unique = true, nullable = false)
     private User user;
 
+    @Version
+    private Long version = 0L;  // 초기값을 0으로 설정
+
     @Override
     public Long getId() {
         return this.id;

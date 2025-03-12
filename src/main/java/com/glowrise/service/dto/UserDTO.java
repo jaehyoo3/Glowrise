@@ -13,4 +13,5 @@ public class UserDTO {
     private String role;
     private String site;
     private Long blogId;
+    private Long userId;
 }

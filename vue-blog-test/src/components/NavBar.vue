@@ -19,16 +19,22 @@
 
       <div class="navbar-menu">
         <template v-if="isLoggedIn">
-          <div class="user-menu" @click="toggleUserDropdown">
-            <img :src="userProfileImage || '/img/default-avatar.png'" alt="프로필" class="profile-image">
+          <div class="user-menu" @click.stop="toggleUserDropdown">
             <span class="user-name">{{ userName }}</span>
             <i class="fas fa-chevron-down"></i>
 
-            <div class="dropdown-menu" v-show="showUserDropdown">
-              <router-link to="/my-blog" class="dropdown-item">내 블로그</router-link>
-              <router-link to="/profile" class="dropdown-item">프로필 설정</router-link>
+            <div class="dropdown-menu" v-if="showUserDropdown">
+              <template v-if="hasBlog">
+                <router-link to="/my-blog" class="dropdown-item">내 블로그</router-link>
+                <router-link to="/profile" class="dropdown-item">프로필 설정</router-link>
+              </template>
+              <template v-else>
+                <router-link to="/blog/create" class="dropdown-item" @click.stop="logNavigation">블로그 생성하기</router-link>
+              </template>
               <div class="dropdown-divider"></div>
-              <button @click="handleLogout" class="dropdown-item">로그아웃</button>
+              <button @click.stop="handleLogout" class="dropdown-item" :disabled="isLoggingOut">
+                {{ isLoggingOut ? '로그아웃 중...' : '로그아웃' }}
+              </button>
             </div>
           </div>
 
@@ -47,6 +53,7 @@
 
 <script>
 import authService from '@/services/authService';
+import axios from 'axios';
 
 export default {
   name: 'NavBar',
@@ -56,46 +63,98 @@ export default {
       showUserDropdown: false,
       isLoggedIn: false,
       userName: '',
-      userProfileImage: ''
-    }
+      userProfileImage: '',
+      isLoggingOut: false,
+      isToggling: false,
+      hasBlog: false,
+      userId: null
+    };
   },
   created() {
     this.checkLoginStatus();
-    // 클릭 이벤트를 감지하여 드롭다운 메뉴 닫기
     document.addEventListener('click', this.closeDropdown);
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeDropdown);
   },
   methods: {
-    checkLoginStatus() {
+    async checkLoginStatus() {
       const user = authService.getStoredUser();
+      console.log('Stored User:', user);
       if (user) {
         this.isLoggedIn = true;
-        this.userName = user.nickName || user.username;
-        this.userProfileImage = user.profileImage;
+        this.userName = user.username;
+        this.userId = user.id;
+        this.userProfileImage = user.profileImage || '';
+        await this.checkBlogStatus();
       } else {
         this.isLoggedIn = false;
         this.userName = '';
+        this.userId = null;
         this.userProfileImage = '';
+        this.hasBlog = false;
       }
     },
-    toggleUserDropdown(event) {
-      event.stopPropagation();
+    async checkBlogStatus() {
+      if (!this.userId) {
+        this.hasBlog = false;
+        return;
+      }
+      try {
+        const response = await axios.get(`/user/${this.userId}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('accessToken')}`
+          }
+        });
+        this.hasBlog = response.data !== null && response.data.id !== undefined;
+        console.log('Blog check response:', response.data);
+        console.log('Has blog:', this.hasBlog);
+      } catch (error) {
+        console.error('블로그 상태 확인 실패:', error);
+        this.hasBlog = false;
+      }
+    },
+    toggleUserDropdown() {
+      if (this.isToggling) return;
+      this.isToggling = true;
+      console.log('Toggle triggered, current state:', this.showUserDropdown);
       this.showUserDropdown = !this.showUserDropdown;
+      console.log('Dropdown toggled:', this.showUserDropdown);
+      this.$nextTick(() => {
+        console.log('DOM updated, showUserDropdown:', this.showUserDropdown);
+        const dropdown = document.querySelector('.dropdown-menu');
+        console.log('Dropdown element exists:', !!dropdown);
+        this.isToggling = false;
+      });
     },
     closeDropdown(event) {
+      if (!this.showUserDropdown || this.isToggling) return;
       if (!event.target.closest('.user-menu')) {
+        console.log('Closing dropdown, target:', event.target);
         this.showUserDropdown = false;
+        console.log('Dropdown closed');
       }
+    },
+    logNavigation() {
+      console.log('Navigating to /blog/create');
+      this.showUserDropdown = false;
     },
     async handleLogout() {
       try {
+        this.isLoggingOut = true;
         await authService.logout();
         this.isLoggedIn = false;
+        this.userName = '';
+        this.userId = null;
+        this.userProfileImage = '';
+        this.hasBlog = false;
         this.$router.push('/login');
+        alert('로그아웃되었습니다.');
       } catch (error) {
         console.error('로그아웃 중 오류 발생:', error);
+        alert('로그아웃에 실패했습니다. 다시 시도해주세요.');
+      } finally {
+        this.isLoggingOut = false;
       }
     },
     handleSearch() {
@@ -107,10 +166,11 @@ export default {
       }
     }
   }
-}
+};
 </script>
 
 <style scoped>
+/* 기존 스타일 유지 */
 .navbar {
   background-color: white;
   border-bottom: 1px solid #e5e5e5;
@@ -175,14 +235,6 @@ export default {
   margin-right: 15px;
 }
 
-.profile-image {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-right: 8px;
-}
-
 .user-name {
   font-size: 14px;
   font-weight: 500;
@@ -191,15 +243,17 @@ export default {
 
 .dropdown-menu {
   position: absolute;
-  top: 100%;
+  top: 40px;
   right: 0;
   background-color: white;
   border: 1px solid #e5e5e5;
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 160px;
-  margin-top: 10px;
-  z-index: 10;
+  min-height: 100px;
+  z-index: 2000;
+  padding: 5px 0;
+  display: block;
 }
 
 .dropdown-item {
@@ -208,6 +262,10 @@ export default {
   color: #333;
   text-decoration: none;
   font-size: 14px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
 }
 
 .dropdown-item:hover {

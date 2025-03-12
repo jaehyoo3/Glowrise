@@ -5,6 +5,7 @@ import com.glowrise.service.UserService;
 import com.glowrise.service.dto.BlogDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,20 +19,20 @@ public class BlogController {
     private final BlogService blogService;
 
     @PostMapping
-    public ResponseEntity<BlogDTO> createBlog(@RequestBody BlogDTO dto, @RequestParam Long userId) {
-        BlogDTO createdBlog = blogService.createBlog(dto, userId);
+    public ResponseEntity<BlogDTO> createBlog(@RequestBody BlogDTO dto, Authentication authentication) {
+        BlogDTO createdBlog = blogService.createBlog(dto, authentication);
         return ResponseEntity.ok(createdBlog);
     }
 
     @PutMapping("/{blogId}")
-    public ResponseEntity<BlogDTO> updateBlog(@PathVariable Long blogId, @RequestBody BlogDTO dto, @RequestParam Long userId) {
-        BlogDTO updatedBlog = blogService.updateBlog(blogId, dto, userId);
+    public ResponseEntity<BlogDTO> updateBlog(@PathVariable Long blogId, @RequestBody BlogDTO dto, Authentication authentication) {
+        BlogDTO updatedBlog = blogService.updateBlog(blogId, dto, authentication);
         return ResponseEntity.ok(updatedBlog);
     }
 
     @DeleteMapping("/{blogId}")
-    public ResponseEntity<Void> deleteBlog(@PathVariable Long blogId, @RequestParam Long userId) {
-        blogService.deleteBlog(blogId, userId);
+    public ResponseEntity<Void> deleteBlog(@PathVariable Long blogId, Authentication authentication) {
+        blogService.deleteBlog(blogId, authentication);
         return ResponseEntity.noContent().build();
     }
 
@@ -44,13 +45,18 @@ public class BlogController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<BlogDTO> getBlogByUserId(@PathVariable Long userId) {
         BlogDTO blog = blogService.getBlogByUserId(userId);
-        return blog != null ? ResponseEntity.ok(blog) : ResponseEntity.notFound().build();
+        return ResponseEntity.ok(blog);
     }
 
     @GetMapping("/check-url")
     public ResponseEntity<Boolean> checkUrlAvailability(@RequestParam String url) {
         boolean available = blogService.isUrlAvailable(url);
         return ResponseEntity.ok(available);
+    }
+    @GetMapping("/{url}")
+    public ResponseEntity<BlogDTO> getBlogByUrl(@PathVariable String url) {
+        BlogDTO blog = blogService.getBlogByUrl(url);
+        return blog != null ? ResponseEntity.ok(blog) : ResponseEntity.notFound().build();
     }
 
 }

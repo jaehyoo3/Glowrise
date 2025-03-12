@@ -69,11 +69,12 @@ public class JWTFilter extends OncePerRequestFilter {
             }
         }
 
-        // 유효한 액세스 토큰으로 인증 설정
         String username = jwtUtil.getUsername(accessToken);
         String role = jwtUtil.getRole(accessToken);
+        User userEntity = userRepository.findByUsername(username).orElseThrow();
 
         UserDTO userDTO = new UserDTO();
+        userDTO.setUserId(userEntity.getId()); // userId 설정
         userDTO.setUsername(username);
         userDTO.setRole(role);
 
