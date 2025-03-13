@@ -46,7 +46,7 @@ export default {
     return {
       blog: null,
       isLoading: true,
-      isLoggedIn: false
+      isLoggedIn: false,
     };
   },
   async created() {
@@ -67,12 +67,16 @@ export default {
         }
       } catch (error) {
         console.error('블로그 로드 실패:', error);
-        this.blog = null; // 오류 시에도 블로그 없음으로 설정
+        this.blog = null;
+        this.isLoggedIn = false;
+        if (error.response?.status === 401) {
+          this.$router.push('/login');
+        }
       } finally {
         this.isLoading = false;
       }
-    }
-  }
+    },
+  },
 };
 </script>
 

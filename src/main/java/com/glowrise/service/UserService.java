@@ -7,13 +7,15 @@ import com.glowrise.domain.enumerate.SITE;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.UserDTO;
 import com.glowrise.service.mapper.UserMapper;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.ErrorResponseException;
+
 
 import java.util.HashMap;
 import java.util.Map;
@@ -138,5 +140,61 @@ public class UserService {
         if (userRepository.findByEmail(email).isPresent()) {
             throw new Exception("이미 사용 중인 이메일입니다");
         }
+    }
+
+    public Map<String, String> refreshToken(String refreshToken, HttpServletResponse response) {
+        System.out.println("Refresh request received, Refresh Token: " + (refreshToken != null ? "present" : "missing"));
+
+        // 리프레시 토큰이 없는 경우
+        if (refreshToken == null) {
+            throw new IllegalArgumentException("No refresh token provided");
+        }
+
+        try {
+            // 리프레시 토큰 만료 확인
+            if (jwtUtil.isExpired(refreshToken)) {
+                System.out.println("Refresh token expired");
+                throw new IllegalArgumentException("Refresh token expired");
+            }
+
+            // 사용자 정보 조회
+            String username = jwtUtil.getUsername(refreshToken);
+            User userEntity = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new IllegalStateException("User not found: " + username));
+
+            // 리프레시 토큰 일치 여부 확인
+            if (!userEntity.getRefreshToken().equals(refreshToken)) {
+                System.out.println("Refresh token mismatch");
+                throw new IllegalArgumentException("Invalid refresh token");
+            }
+
+            // 새 액세스 토큰 발급
+            String role = userEntity.getRole().name();
+            String newAccessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L); // 1시간
+            userEntity.setAccessToken(newAccessToken);
+            userRepository.save(userEntity);
+
+            // 쿠키에 새 액세스 토큰 설정
+            response.addCookie(createCookie("Authorization", newAccessToken));
+            System.out.println("New access token issued: " + newAccessToken);
+
+            // 응답 데이터 준비
+            Map<String, String> result = new HashMap<>();
+            result.put("message", "Token refreshed");
+            result.put("accessToken", newAccessToken);
+            return result;
+
+        } catch (Exception e) {
+            System.out.println("Refresh token processing failed: " + e.getMessage());
+            throw new IllegalArgumentException("Invalid refresh token: " + e.getMessage());
+        }
+    }
+
+    private Cookie createCookie(String key, String value) {
+        Cookie cookie = new Cookie(key, value);
+        cookie.setMaxAge(60 * 60 * 24); // 24시간
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        return cookie;
     }
 }

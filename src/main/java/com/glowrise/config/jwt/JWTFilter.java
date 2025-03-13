@@ -4,6 +4,7 @@ import com.glowrise.config.jwt.dto.CustomOAuthUser;
 import com.glowrise.domain.User;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.UserDTO;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -21,75 +22,68 @@ import java.io.IOException;
 @Component
 @RequiredArgsConstructor
 public class JWTFilter extends OncePerRequestFilter {
-
     private final JWTUtil jwtUtil;
     private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
-        String accessToken = null;
-        String refreshToken = null;
-        Cookie[] cookies = request.getCookies();
-
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
-                if (cookie.getName().equals("Authorization")) {
-                    accessToken = cookie.getValue();
-                }
-                if (cookie.getName().equals("RefreshToken")) {
-                    refreshToken = cookie.getValue();
-                }
-            }
-        }
-
+        String accessToken = getCookieValue(request, "Authorization");
+        String refreshToken = getCookieValue(request, "RefreshToken");
         String requestUri = request.getRequestURI();
-        if (requestUri.startsWith("/api/auth/") || requestUri.startsWith("/login/") || requestUri.startsWith("/oauth2/")) {
+        System.out.println("Request URI: " + requestUri + ", Access Token: " + (accessToken != null ? "present" : "missing") + ", Refresh Token: " + (refreshToken != null ? "present" : "missing"));
+
+        // 인증이 필요 없는 경로 제외
+        if (requestUri.startsWith("/login") || requestUri.startsWith("/api/users/refresh") || requestUri.startsWith("/api/auth/")) {
+            System.out.println("Skipping JWT filter for: " + requestUri);
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 액세스 토큰이 없거나 만료된 경우
-        if (accessToken == null || jwtUtil.isExpired(accessToken)) {
-            if (refreshToken != null && !jwtUtil.isExpired(refreshToken)) {
-                // 리프레시 토큰이 유효하면 새로운 액세스 토큰 발급
-                String username = jwtUtil.getUsername(refreshToken);
-                User userEntity = userRepository.findByUsername(username).orElseThrow();
-                if (userEntity.getRefreshToken().equals(refreshToken)) {
-                    String role = userEntity.getRole().name();
-                    accessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L);
-                    userEntity.setAccessToken(accessToken);
-                    userRepository.save(userEntity);
-
-                    // 새로운 액세스 토큰을 쿠키에 설정
-                    response.addCookie(createCookie("Authorization", accessToken));
-                }
-            } else {
-                filterChain.doFilter(request, response);
-                return;
-            }
+        if (accessToken == null) {
+            System.out.println("No access token provided");
+            sendUnauthorized(response, "No access token");
+            return;
         }
 
-        String username = jwtUtil.getUsername(accessToken);
-        String role = jwtUtil.getRole(accessToken);
-        User userEntity = userRepository.findByUsername(username).orElseThrow();
+        try {
+            if (jwtUtil.isExpired(accessToken)) {
+                System.out.println("Access token expired");
+                sendUnauthorized(response, "Token expired");
+                return;
+            }
 
-        UserDTO userDTO = new UserDTO();
-        userDTO.setUserId(userEntity.getId()); // userId 설정
-        userDTO.setUsername(username);
-        userDTO.setRole(role);
+            String username = jwtUtil.getUsername(accessToken);
+            String role = jwtUtil.getRole(accessToken);
+            User userEntity = userRepository.findByUsername(username).orElseThrow();
 
-        CustomOAuthUser user = new CustomOAuthUser(userDTO);
-        Authentication auth = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
-        SecurityContextHolder.getContext().setAuthentication(auth);
+            UserDTO userDTO = new UserDTO();
+            userDTO.setUserId(userEntity.getId());
+            userDTO.setUsername(username);
+            userDTO.setRole(role);
 
-        filterChain.doFilter(request, response);
+            CustomOAuthUser user = new CustomOAuthUser(userDTO);
+            Authentication auth = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            filterChain.doFilter(request, response);
+        } catch (ExpiredJwtException e) {
+            System.out.println("JWT parsing failed: " + e.getMessage());
+            sendUnauthorized(response, "Token expired");
+        }
     }
 
-    private Cookie createCookie(String key, String value) {
-        Cookie cookie = new Cookie(key, value);
-        cookie.setMaxAge(60 * 60 * 60);
-        cookie.setPath("/");
-        cookie.setHttpOnly(true);
-        return cookie;
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + message + "\"}");
+    }
+
+    private String getCookieValue(HttpServletRequest request, String name) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (cookie.getName().equals(name)) return cookie.getValue();
+            }
+        }
+        return null;
     }
 }

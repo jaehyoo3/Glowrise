@@ -1,16 +1,16 @@
 package com.glowrise.web;
 
-import com.glowrise.config.jwt.JWTUtil;
-import com.glowrise.config.jwt.dto.CustomOAuthUser;
+
 import com.glowrise.service.UserService;
 import com.glowrise.service.dto.UserDTO;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.ResponseCookie;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.stereotype.Controller;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.Cookie;
 
 import java.util.Map;
 import java.util.Optional;
@@ -53,11 +53,36 @@ public class UserController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // 리프레시 토큰을 사용한 토큰 갱신
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, String>> refreshToken(@RequestBody Map<String, String> request) throws Exception {
-        String refreshToken = request.get("refreshToken");
-        Map<String, String> tokens = userService.refreshToken(refreshToken);
-        return ResponseEntity.ok(tokens);
+    public ResponseEntity<?> refreshToken(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = getCookieValue(request, "RefreshToken");
+
+        try {
+            Map<String, String> result = userService.refreshToken(refreshToken, response);
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("{\"error\": \"Unauthorized\", \"message\": \"" + e.getMessage() + "\"}");
+        }
+    }
+
+    private String getCookieValue(HttpServletRequest request, String name) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (cookie.getName().equals(name)) return cookie.getValue();
+            }
+        }
+        return null;
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<UserDTO> getCurrentUser(Authentication authentication) throws Exception {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String username = authentication.getName();
+        UserDTO userDTO = userService.getUserProfile(username);
+        return ResponseEntity.ok(userDTO);
     }
 }

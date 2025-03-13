@@ -53,7 +53,6 @@
 
 <script>
 import authService from '@/services/authService';
-import axios from 'axios';
 
 export default {
   name: 'NavBar',
@@ -71,8 +70,7 @@ export default {
     };
   },
   created() {
-    this.checkLoginStatus();
-    document.addEventListener('click', this.closeDropdown);
+    this.checkLoginStatus(); // 한 번만 호출
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeDropdown);
@@ -86,28 +84,35 @@ export default {
         this.userName = user.username;
         this.userId = user.id;
         this.userProfileImage = user.profileImage || '';
-        await this.checkBlogStatus();
+        await this.checkBlogStatus(); // 비동기 호출 최소화
       } else {
+        console.log('No valid user, staying logged out');
         this.isLoggedIn = false;
         this.userName = '';
         this.userId = null;
         this.userProfileImage = '';
         this.hasBlog = false;
+        // 서버 호출 필요 시 여기서 getCurrentUser 호출
+        try {
+          const serverUser = await authService.getCurrentUser();
+          authService.setStoredUser({ id: serverUser.userId, username: serverUser.username });
+          this.checkLoginStatus(); // 재귀 호출 대신 상태 갱신
+        } catch (error) {
+          console.error('Failed to fetch current user:', error);
+        }
       }
     },
     async checkBlogStatus() {
       if (!this.userId) {
+        console.log('No userId, skipping blog status check');
         this.hasBlog = false;
         return;
       }
       try {
-        const response = await axios.get(`/user/${this.userId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('accessToken')}`
-          }
-        });
-        this.hasBlog = response.data !== null && response.data.id !== undefined;
-        console.log('Blog check response:', response.data);
+        console.log('Checking blog status for userId:', this.userId);
+        const response = await authService.getBlogByUserId(this.userId);
+        this.hasBlog = response !== null && response.id !== undefined;
+        console.log('Blog check response:', response);
         console.log('Has blog:', this.hasBlog);
       } catch (error) {
         console.error('블로그 상태 확인 실패:', error);

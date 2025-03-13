@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
@@ -18,9 +19,11 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
-public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
+public class CustomSuccessHandler implements AuthenticationSuccessHandler {
     private final JWTUtil jwtUtil;
     private final UserRepository userRepository;
+
+    private static final String FRONTEND_REDIRECT_URL = "http://localhost:3000/oauth2/redirect"; // 리다이렉션 경로
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
@@ -33,7 +36,7 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
             role = authentication.getAuthorities().iterator().next().getAuthority();
         } else if (authentication.getPrincipal() instanceof UserDetails userDetails) {
             username = userDetails.getUsername();
-            role = authentication.getAuthorities().iterator().next().getAuthority();
+            role = userDetails.getAuthorities().iterator().next().getAuthority();
         } else {
             throw new IllegalStateException("지원되지 않는 인증 유형입니다");
         }
@@ -50,22 +53,24 @@ public class CustomSuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         response.addCookie(createCookie("Authorization", accessToken));
         response.addCookie(createCookie("RefreshToken", refreshToken));
 
-        Map<String, Object> responseBody = new HashMap<>(); // String → Object로 변경
+        Map<String, Object> responseBody = new HashMap<>();
         responseBody.put("accessToken", accessToken);
         responseBody.put("refreshToken", refreshToken);
         responseBody.put("username", username);
-        responseBody.put("userId", userEntity.getId()); // userId 추가
+        responseBody.put("userId", userEntity.getId());
         responseBody.put("message", "로그인 성공");
 
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
-        response.setStatus(HttpServletResponse.SC_OK);
         response.getWriter().write(new ObjectMapper().writeValueAsString(responseBody));
+
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.sendRedirect(FRONTEND_REDIRECT_URL); // /oauth2/redirect로 변경
     }
 
     private Cookie createCookie(String key, String value) {
         Cookie cookie = new Cookie(key, value);
-        cookie.setMaxAge(60 * 60 * 60);
+        cookie.setMaxAge(key.equals("Authorization") ? 60 * 60 : 7 * 24 * 60 * 60);
         cookie.setPath("/");
         cookie.setHttpOnly(true);
         return cookie;

@@ -73,7 +73,7 @@
           </div>
         </div>
 
-        <!-- 회원가입 폼 (변경 없음) -->
+        <!-- 회원가입 폼 -->
         <div v-if="activeTab === 'signup'" class="signup-form">
           <form @submit.prevent="handleSignup">
             <div class="form-group">
@@ -187,7 +187,6 @@ export default {
       }
     },
 
-    // 나머지 메서드 유지
     async handleSignup() {
       if (this.signupForm.password !== this.signupForm.passwordConfirm) {
         this.signupError = '비밀번호가 일치하지 않습니다.';
@@ -224,6 +223,9 @@ export default {
 };
 </script>
 
+<style scoped>
+/* 기존 스타일 유지 */
+</style>
 <style scoped>
 .login-container {
   display: flex;

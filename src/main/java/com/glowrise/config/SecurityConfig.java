@@ -49,17 +49,17 @@ public class SecurityConfig {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
-                .cors(cors -> cors.configurationSource(corsConfigurationSource())) // YAML에서 읽은 CORS 설정 적용
-                .addFilterAfter(jwtFilter, UsernamePasswordAuthenticationFilter.class) // 주입받은 빈 사용
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .addFilterAfter(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form
-                        .loginProcessingUrl("/login") // 로그인 요청 URL
-                        .usernameParameter("email")   // 이메일 필드 이름 설정
-                        .passwordParameter("password") // 비밀번호 필드 이름 (기본값이지만 명시)
+                        .loginProcessingUrl("/login")
+                        .usernameParameter("email")
+                        .passwordParameter("password")
                         .successHandler(customSuccessHandler)
                         .failureHandler((request, response, exception) -> {
                             response.setContentType("application/json");
                             response.setCharacterEncoding("UTF-8");
-                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED); // 401
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                             Map<String, String> error = new HashMap<>();
                             error.put("error", "로그인 실패");
                             error.put("message", exception.getMessage());
@@ -69,17 +69,23 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfoEndpointConfig ->
                                 userInfoEndpointConfig.userService(customOAuth2UserService))
-                        .successHandler(customSuccessHandler))
+                        .successHandler(customSuccessHandler) // CustomSuccessHandler에서 리다이렉션 처리
+                        .authorizationEndpoint(authorization -> authorization
+                                .baseUri("/oauth2/authorization"))
+                        .redirectionEndpoint(redirection -> redirection
+                                .baseUri("/login/oauth2/code/*")))
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                .requestMatchers("/api/users/signup", "/login", "/api/users/refresh", "/h2-console/**").permitAll()
+                                .requestMatchers("/api/users/signup", "/login", "/api/users/refresh",
+                                        "/oauth2/authorization/**", "/login/oauth2/code/**", "/h2-console/**")
+                                .permitAll()
                                 .anyRequest().authenticated())
-                .headers(httpSecurityHeadersConfigurer ->
-                        httpSecurityHeadersConfigurer.frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
-                .sessionManagement(sessionManagement -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .headers(headers -> headers
+                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
+                .sessionManagement(sessionManagement ->
+                        sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .build();
     }
-
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
