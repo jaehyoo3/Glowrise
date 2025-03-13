@@ -6,65 +6,61 @@ const FRONTEND_URL = 'http://localhost:3000';
 axios.defaults.withCredentials = true;
 
 const authService = {
+    // 일반 로그인
     login: async (email, password) => {
-        const response = await axios.post(
-            `${API_URL}/login`,
-            new URLSearchParams({ email, password }),
-            { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-        );
-        const { accessToken, refreshToken, username, userId } = response.data;
-        console.log('Login response:', response.data);
-
-        const user = { id: userId, username };
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        authService.setStoredUser(user);
-        return response.data;
+        try {
+            const response = await axios.post(
+                `${API_URL}/login`,
+                new URLSearchParams({ email, password }),
+                { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+            );
+            const { accessToken, refreshToken, username, userId } = response.data;
+            console.log('Login response:', response.data);
+            const user = { id: userId, username };
+            localStorage.setItem('accessToken', accessToken);
+            localStorage.setItem('refreshToken', refreshToken);
+            authService.setStoredUser(user);
+            return response.data;
+        } catch (error) {
+            console.error('Login failed:', error);
+            throw error;
+        }
     },
 
     signup: async (userData) => {
         const response = await axios.post(`${API_URL}/api/users/signup`, userData);
+        console.log('Signup response:', response.data);
         return response.data;
     },
 
     logout: async () => {
-        const response = await axios.post(`${API_URL}/api/users/logout`);
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('user');
-        return response.data;
+        try {
+            const response = await axios.post(`${API_URL}/api/users/logout`);
+            console.log('Logout response:', response.data);
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            return response.data;
+        } catch (error) {
+            console.error('Logout failed:', error);
+            throw error;
+        }
     },
 
     getCurrentUser: async () => {
-        const response = await axios.get(`${API_URL}/api/users/me`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-        });
-        return response.data;
-    },
-
-    handleOAuth2Redirect: async (router) => {
+        const token = localStorage.getItem('accessToken');
+        if (!token) {
+            console.log('No access token found in localStorage');
+            throw new Error('No access token available');
+        }
         try {
-            // 서버에서 이미 토큰을 쿠키에 설정했으므로, 사용자 정보만 확인
-            const response = await authService.getCurrentUser();
-            const { username, id } = response;
-            console.log('OAuth2 redirect response:', response);
-
-            const user = { id, username };
-            authService.setStoredUser(user);
-
-            if (router) {
-                router.push('/'); // 홈으로 이동
-            } else {
-                window.location.href = `${FRONTEND_URL}/`;
-            }
-            return response;
+            const response = await axios.get(`${API_URL}/api/users/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log('Get current user response:', response.data);
+            return response.data;
         } catch (error) {
-            console.error('OAuth2 redirect failed:', error);
-            if (router) {
-                router.push('/login');
-            } else {
-                window.location.href = `${FRONTEND_URL}/login`;
-            }
+            console.error('Get current user failed:', error);
             throw error;
         }
     },
@@ -73,17 +69,20 @@ const authService = {
         const refreshToken = localStorage.getItem('refreshToken');
         console.log('Refreshing token with:', refreshToken ? 'present' : 'missing');
         if (!refreshToken) throw new Error('No refresh token available');
-
-        const response = await axios.post(
-            `${API_URL}/api/users/refresh`,
-            { refreshToken },
-            { withCredentials: true }
-        );
-        const { accessToken } = response.data;
-        console.log('Refresh response:', response.data);
-
-        localStorage.setItem('accessToken', accessToken);
-        return response;
+        try {
+            const response = await axios.post(
+                `${API_URL}/api/users/refresh`,
+                { refreshToken },
+                { withCredentials: true }
+            );
+            const { accessToken } = response.data;
+            console.log('Refresh response:', response.data);
+            localStorage.setItem('accessToken', accessToken);
+            return response;
+        } catch (error) {
+            console.error('Refresh token failed:', error);
+            throw error;
+        }
     },
 
     getStoredUser: () => {
@@ -97,51 +96,92 @@ const authService = {
         localStorage.setItem('user', JSON.stringify(user));
     },
 
-    createBlog: async (blogData, userId) => {
-        const response = await axios.post(`${API_URL}/api/blogs`, blogData, {
-            params: { userId },
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-        });
-        return response.data;
+// 블로그 생성
+    createBlog: async (blogData) => {
+        const token = localStorage.getItem('accessToken');
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.post(`${API_URL}/api/blogs`, blogData, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log('Blog created:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Blog creation failed:', error);
+            throw error;
+        }
     },
 
     updateBlog: async (blogId, blogData, userId) => {
-        const response = await axios.put(`${API_URL}/api/blogs/${blogId}`, blogData, {
-            params: { userId },
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-        });
-        return response.data;
+        const token = localStorage.getItem('accessToken');
+        try {
+            const response = await axios.patch(`${API_URL}/api/blogs/${blogId}`, blogData, {
+                params: { userId },
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log('Update blog response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Update blog failed:', error);
+            throw error;
+        }
     },
 
     deleteBlog: async (blogId, userId) => {
-        await axios.delete(`${API_URL}/api/blogs/${blogId}`, {
-            params: { userId },
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-        });
+        const token = localStorage.getItem('accessToken');
+        try {
+            await axios.delete(`${API_URL}/api/blogs/${blogId}`, {
+                params: { userId },
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log('Blog deleted successfully');
+        } catch (error) {
+            console.error('Delete blog failed:', error);
+            throw error;
+        }
     },
-
-    getBlogByUserId: async (userId) => {
-        const response = await axios.get(`${API_URL}/api/blogs/user/${userId}`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-        });
-        return response.data;
+    async getBlogByUserId() {
+        const token = localStorage.getItem('accessToken');
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.get(`${API_URL}/api/blogs/me`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log('Get blog by userId response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Get blog by userId failed:', error);
+            return null; // 블로그가 없으면 null 반환
+        }
     },
 
     checkUrlAvailability: async (url) => {
-        const response = await axios.get(
-            `${API_URL}/api/blogs/check-url?url=${encodeURIComponent(url)}`,
-            {
-                headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-            }
-        );
-        return response.data;
+        const token = localStorage.getItem('accessToken');
+        try {
+            const response = await axios.get(
+                `${API_URL}/api/blogs/check-url?url=${encodeURIComponent(url)}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            console.log('Check URL availability response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Check URL availability failed:', error);
+            throw error;
+        }
     },
-
-    getBlogByUrl: async (url) => {
-        const response = await axios.get(`${API_URL}/api/blogs/${url}`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('accessToken')}` },
-        });
-        return response.data;
+    async getBlogByUrl(url) {
+        const token = localStorage.getItem('accessToken');
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.get(`${API_URL}/api/blogs/${url}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            console.log('Get blog by URL response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Get blog by URL failed:', error);
+            throw error;
+        }
     },
 };
 

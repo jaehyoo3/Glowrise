@@ -1,8 +1,11 @@
 package com.glowrise.service.dto;
 
-import lombok.Data;
+import lombok.*;
 
-@Data
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
+@Setter
 public class UserDTO {
 
     private Long id;

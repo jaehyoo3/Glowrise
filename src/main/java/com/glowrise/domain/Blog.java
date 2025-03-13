@@ -1,13 +1,21 @@
 package com.glowrise.domain;
 
+import com.glowrise.service.dto.BlogDTO;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
-@Table
+@Table(name = "blogs")
 @Getter
 @Setter
+@AllArgsConstructor
+@NoArgsConstructor
 public class Blog extends AbstractAuditingEntity<Long> {
 
     @Id
@@ -25,11 +33,12 @@ public class Blog extends AbstractAuditingEntity<Long> {
     @JoinColumn(name = "user_id", unique = true, nullable = false)
     private User user;
 
-    @Version
-    private Long version = 0L;  // 초기값을 0으로 설정
+    @OneToMany(mappedBy = "blog", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Menu> menus = new ArrayList<>();  // 메뉴 리스트 추가
 
-    @Override
-    public Long getId() {
-        return this.id;
+    public Blog(BlogDTO dto) {
+        this.title = dto.getTitle();
+        this.description = dto.getDescription();
+        this.url = dto.getUrl();
     }
 }

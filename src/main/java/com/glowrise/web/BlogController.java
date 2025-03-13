@@ -1,5 +1,6 @@
 package com.glowrise.web;
 
+import com.glowrise.domain.Blog;
 import com.glowrise.service.BlogService;
 import com.glowrise.service.UserService;
 import com.glowrise.service.dto.BlogDTO;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 @RequiredArgsConstructor
@@ -24,9 +26,10 @@ public class BlogController {
         return ResponseEntity.ok(createdBlog);
     }
 
-    @PutMapping("/{blogId}")
-    public ResponseEntity<BlogDTO> updateBlog(@PathVariable Long blogId, @RequestBody BlogDTO dto, Authentication authentication) {
-        BlogDTO updatedBlog = blogService.updateBlog(blogId, dto, authentication);
+    @PatchMapping("/{blogId}")
+    public ResponseEntity<Optional<BlogDTO>> updateBlog(@PathVariable Long blogId, @RequestBody BlogDTO dto, Authentication authentication) {
+
+        Optional<BlogDTO> updatedBlog = blogService.updateBlog(blogId, dto, authentication);
         return ResponseEntity.ok(updatedBlog);
     }
 
@@ -57,6 +60,12 @@ public class BlogController {
     public ResponseEntity<BlogDTO> getBlogByUrl(@PathVariable String url) {
         BlogDTO blog = blogService.getBlogByUrl(url);
         return blog != null ? ResponseEntity.ok(blog) : ResponseEntity.notFound().build();
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<BlogDTO> getMyBlog(Authentication authentication) {
+        BlogDTO blogDTO = blogService.getMyBlog(authentication);
+        return ResponseEntity.ok(blogDTO);
     }
 
 }

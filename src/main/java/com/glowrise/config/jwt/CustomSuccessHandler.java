@@ -14,6 +14,7 @@ import org.springframework.security.web.authentication.SimpleUrlAuthenticationSu
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -23,7 +24,7 @@ public class CustomSuccessHandler implements AuthenticationSuccessHandler {
     private final JWTUtil jwtUtil;
     private final UserRepository userRepository;
 
-    private static final String FRONTEND_REDIRECT_URL = "http://localhost:3000/oauth2/redirect"; // 리다이렉션 경로
+    private static final String FRONTEND_REDIRECT_URL = "http://localhost:3000/oauth2/redirect";
 
     @Override
     public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication)
@@ -50,9 +51,11 @@ public class CustomSuccessHandler implements AuthenticationSuccessHandler {
         userEntity.setRefreshToken(refreshToken);
         userRepository.save(userEntity);
 
+        // 쿠키 설정 (선택적)
         response.addCookie(createCookie("Authorization", accessToken));
         response.addCookie(createCookie("RefreshToken", refreshToken));
 
+        // JSON 응답
         Map<String, Object> responseBody = new HashMap<>();
         responseBody.put("accessToken", accessToken);
         responseBody.put("refreshToken", refreshToken);
@@ -63,9 +66,15 @@ public class CustomSuccessHandler implements AuthenticationSuccessHandler {
         response.setContentType("application/json");
         response.setCharacterEncoding("UTF-8");
         response.getWriter().write(new ObjectMapper().writeValueAsString(responseBody));
-
         response.setStatus(HttpServletResponse.SC_OK);
-        response.sendRedirect(FRONTEND_REDIRECT_URL); // /oauth2/redirect로 변경
+
+        // OAuth2일 경우에만 리다이렉트
+        if (authentication.getPrincipal() instanceof CustomOAuthUser) {
+            String redirectUrl = FRONTEND_REDIRECT_URL + "?accessToken=" + URLEncoder.encode(accessToken, "UTF-8") +
+                    "&refreshToken=" + URLEncoder.encode(refreshToken, "UTF-8");
+            response.sendRedirect(redirectUrl);
+        }
+        // 일반 로그인은 JSON만 반환, 클라이언트에서 처리
     }
 
     private Cookie createCookie(String key, String value) {

@@ -110,7 +110,7 @@ export default {
       }
       try {
         console.log('Checking blog status for userId:', this.userId);
-        const response = await authService.getBlogByUserId(this.userId);
+        const response = await authService.getBlogByUserId();
         this.hasBlog = response !== null && response.id !== undefined;
         console.log('Blog check response:', response);
         console.log('Has blog:', this.hasBlog);

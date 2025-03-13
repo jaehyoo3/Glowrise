@@ -173,6 +173,7 @@ export default {
     };
   },
   methods: {
+    // 일반 로그인 처리
     async handleLogin() {
       try {
         this.loginError = '';
@@ -180,13 +181,14 @@ export default {
         console.log('로그인 성공:', response);
         console.log('Stored User after login:', authService.getStoredUser());
         this.$emit('login-success');
-        this.$router.push('/');
+        this.$router.push('/'); // 홈으로 이동
       } catch (error) {
         console.error('로그인 에러:', error);
         this.loginError = error.response?.data?.message || '로그인에 실패했습니다.';
       }
     },
 
+    // 회원가입 처리
     async handleSignup() {
       if (this.signupForm.password !== this.signupForm.passwordConfirm) {
         this.signupError = '비밀번호가 일치하지 않습니다.';
@@ -216,7 +218,9 @@ export default {
       }
     },
 
+    // 소셜 로그인 (OAuth2) 처리
     handleSocialLogin(provider) {
+      console.log(`Initiating ${provider} login`);
       window.location.href = `http://localhost:8080/oauth2/authorization/${provider}`;
     }
   }
@@ -224,128 +228,114 @@ export default {
 </script>
 
 <style scoped>
-/* 기존 스타일 유지 */
-</style>
-<style scoped>
 .login-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  background-color: #f5f6f7;
-  padding: 20px;
+  height: 100vh;
+  background-color: #f5f5f5;
 }
 
 .login-wrapper {
-  width: 100%;
-  max-width: 500px;
   background-color: white;
+  padding: 40px;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  width: 100%;
+  max-width: 400px;
 }
 
 .login-header {
   text-align: center;
-  padding: 30px 20px;
-  background-color: #03C75A; /* 네이버 색상 */
-  color: white;
+  margin-bottom: 30px;
 }
 
 .blog-title {
-  font-size: 28px;
-  margin-bottom: 5px;
+  font-size: 24px;
   font-weight: bold;
+  color: #333;
 }
 
 .blog-subtitle {
-  font-size: 16px;
-  opacity: 0.9;
-}
-
-.login-form-container {
-  padding: 20px;
+  font-size: 14px;
+  color: #666;
 }
 
 .login-tabs {
   display: flex;
+  justify-content: space-around;
   margin-bottom: 20px;
-  border-bottom: 1px solid #e5e5e5;
 }
 
 .tab-btn {
-  flex: 1;
-  padding: 15px;
   background: none;
   border: none;
+  padding: 10px;
   font-size: 16px;
   cursor: pointer;
-  color: #888;
-  font-weight: 500;
+  color: #666;
 }
 
 .tab-btn.active {
-  color: #03C75A;
-  border-bottom: 2px solid #03C75A;
+  color: #007bff;
+  border-bottom: 2px solid #007bff;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px;
-  font-weight: 500;
+  font-size: 14px;
   color: #333;
+  margin-bottom: 5px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px;
+  padding: 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
 }
 
 .form-group small {
-  color: #888;
   font-size: 12px;
-  margin-top: 5px;
-  display: block;
+  color: #666;
 }
 
 .remember-me {
   display: flex;
   align-items: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
-.remember-me input {
-  margin-right: 8px;
+.remember-me label {
+  margin-left: 5px;
+  font-size: 14px;
+  color: #666;
 }
 
 .error-message {
-  color: #e74c3c;
-  margin-bottom: 15px;
+  color: red;
   font-size: 14px;
+  margin-bottom: 15px;
 }
 
 .login-btn, .signup-btn {
   width: 100%;
-  padding: 12px;
-  background-color: #03C75A;
+  padding: 10px;
+  background-color: #007bff;
   color: white;
   border: none;
   border-radius: 4px;
   font-size: 16px;
-  font-weight: bold;
   cursor: pointer;
-  margin-bottom: 15px;
 }
 
 .login-btn:hover, .signup-btn:hover {
-  background-color: #02b350;
+  background-color: #0056b3;
 }
 
 .divider {
@@ -354,30 +344,21 @@ export default {
   position: relative;
 }
 
-.divider::before,
-.divider::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  width: 45%;
-  height: 1px;
-  background-color: #e5e5e5;
-}
-
-.divider::before {
-  left: 0;
-}
-
-.divider::after {
-  right: 0;
-}
-
 .divider span {
   background-color: white;
   padding: 0 10px;
-  color: #888;
-  position: relative;
-  z-index: 1;
+  color: #666;
+  font-size: 14px;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px solid #ddd;
+  z-index: -1;
 }
 
 .social-login, .social-signup {
@@ -387,33 +368,27 @@ export default {
 }
 
 .social-btn {
-  padding: 12px;
+  padding: 10px;
   border: none;
   border-radius: 4px;
   font-size: 14px;
-  font-weight: 500;
   cursor: pointer;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.naver-btn {
-  background-color: #03C75A;
   color: white;
 }
 
-.google-btn {
-  background-color: white;
-  border: 1px solid #ddd;
-  color: #333;
+.naver-btn {
+  background-color: #03c75a;
 }
 
-@media (max-width: 576px) {
-  .login-wrapper {
-    max-width: 100%;
-    border-radius: 0;
-    box-shadow: none;
-  }
+.naver-btn:hover {
+  background-color: #02b050;
+}
+
+.google-btn {
+  background-color: #4285f4;
+}
+
+.google-btn:hover {
+  background-color: #357abd;
 }
 </style>

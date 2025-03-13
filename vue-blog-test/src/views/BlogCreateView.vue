@@ -48,7 +48,7 @@ export default {
   name: 'BlogCreateView',
   data() {
     return {
-      form: { title: '', description: '', url: '' },
+      form: { title: '', description: '', url: '', userId: null }, // userId 추가
       urlAvailable: false,
       urlError: ''
     };
@@ -75,9 +75,11 @@ export default {
     async handleCreateBlog() {
       try {
         const user = await authService.getCurrentUser();
-        await authService.createBlog(this.form, user.id);
+        this.form.userId = user.id; // form에 userId 추가
+        console.log('Creating blog with data:', this.form); // 디버깅용 로그
+        await authService.createBlog(this.form); // userId를 별도 파라미터로 보내지 않음
         alert('블로그가 생성되었습니다!');
-        this.$router.push('/'); // 홈으로 이동, NavBar에서 checkBlogStatus 호출됨
+        this.$router.push('/'); // 홈으로 이동
       } catch (error) {
         alert('블로그 생성 실패: ' + (error.response?.data?.message || error.message));
       }

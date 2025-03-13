@@ -9,9 +9,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.Cookie;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -77,12 +80,12 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<UserDTO> getCurrentUser(Authentication authentication) throws Exception {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
+        try {
+            Map<String, Object> userInfo = userService.getCurrentUser(authentication);
+            return ResponseEntity.ok(userInfo);
+        } catch (ResponseStatusException e) {
+            return ResponseEntity.status(e.getStatusCode()).build();
         }
-        String username = authentication.getName();
-        UserDTO userDTO = userService.getUserProfile(username);
-        return ResponseEntity.ok(userDTO);
     }
 }
