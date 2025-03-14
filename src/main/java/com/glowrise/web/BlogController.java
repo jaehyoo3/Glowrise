@@ -56,6 +56,7 @@ public class BlogController {
         boolean available = blogService.isUrlAvailable(url);
         return ResponseEntity.ok(available);
     }
+
     @GetMapping("/{url}")
     public ResponseEntity<BlogDTO> getBlogByUrl(@PathVariable String url) {
         BlogDTO blog = blogService.getBlogByUrl(url);
@@ -66,6 +67,11 @@ public class BlogController {
     public ResponseEntity<BlogDTO> getMyBlog(Authentication authentication) {
         BlogDTO blogDTO = blogService.getMyBlog(authentication);
         return ResponseEntity.ok(blogDTO);
+    }
+
+    @GetMapping("/id/{id}")
+    public ResponseEntity<BlogDTO> getBlogById(@PathVariable Long id, Authentication authentication) {
+        return blogService.getBlogById(id, authentication);
     }
 
 }

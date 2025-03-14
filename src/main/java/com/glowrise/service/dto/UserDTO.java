@@ -17,4 +17,5 @@ public class UserDTO {
     private String site;
     private Long blogId;
     private Long userId;
+    private String blogUrl;
 }

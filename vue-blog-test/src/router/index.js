@@ -12,6 +12,7 @@ const routes = [
     { path: '/oauth2/redirect', name: 'OAuth2Redirect', component: () => import('@/views/OAuth2RedirectHandler.vue') },
     { path: '/blog/create', name: 'BlogCreate', component: BlogCreateView, meta: { requiresAuth: true } },
     { path: '/blog/edit', name: 'BlogEdit', component: BlogEditView, meta: { requiresAuth: true } },
+    {path: '/blog/edit/:id', component: () => import('../views/BlogEditView.vue')}, // ID 기반 경로
     { path: '/blog/:url', name: 'Blog', component: BlogView },
     { path: '/:catchAll(.*)', redirect: '/' }
 ];

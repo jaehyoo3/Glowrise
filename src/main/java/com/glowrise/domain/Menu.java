@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "menu")
+@Table(name = "menus")
 @Getter
 @Setter
 public class Menu extends AbstractAuditingEntity<Long> {

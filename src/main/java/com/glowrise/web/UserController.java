@@ -80,12 +80,8 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
-        try {
-            Map<String, Object> userInfo = userService.getCurrentUser(authentication);
-            return ResponseEntity.ok(userInfo);
-        } catch (ResponseStatusException e) {
-            return ResponseEntity.status(e.getStatusCode()).build();
-        }
+    public ResponseEntity<UserDTO> getCurrentUser(Authentication authentication) {
+        UserDTO userDTO = userService.getCurrentUser2(authentication);
+        return ResponseEntity.ok(userDTO);
     }
 }

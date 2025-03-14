@@ -1,9 +1,11 @@
 package com.glowrise.service;
 
 import com.glowrise.config.jwt.JWTUtil;
+import com.glowrise.domain.Blog;
 import com.glowrise.domain.User;
 import com.glowrise.domain.enumerate.ROLE;
 import com.glowrise.domain.enumerate.SITE;
+import com.glowrise.repository.BlogRepository;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.UserDTO;
 import com.glowrise.service.mapper.UserMapper;
@@ -31,6 +33,7 @@ import java.util.Optional;
 public class UserService {
     private final Logger log = LoggerFactory.getLogger(UserService.class);
     private final UserRepository userRepository;
+    private final BlogRepository blogRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final JWTUtil jwtUtil;
@@ -119,7 +122,7 @@ public class UserService {
         }
 
         // 새로운 토큰 생성
-        String newAccessToken = jwtUtil.generateAccessToken(user.getUsername(), user.getRole().name(), 60 * 60 * 1000L);
+        String newAccessToken = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name(), 60 * 60 * 1000L);
         String newRefreshToken = jwtUtil.generateRefreshToken(user.getUsername(), 7 * 24 * 60 * 60 * 1000L);
 
         // User 엔티티에 저장
@@ -175,7 +178,7 @@ public class UserService {
 
             // 새 액세스 토큰 발급
             String role = userEntity.getRole().name();
-            String newAccessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L); // 1시간
+            String newAccessToken = jwtUtil.generateAccessToken(userEntity.getId(), username, role, 60 * 60 * 1000L); // 1시간
             userEntity.setAccessToken(newAccessToken);
             userRepository.save(userEntity);
 
@@ -218,22 +221,39 @@ public class UserService {
         return response;
     }
 
-    @Named("userById")
-    public User getUserById(Long id) {
-        if (id == null) {
-            return null;
+    public UserDTO getCurrentUser2(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new IllegalStateException("인증 정보가 없습니다.");
         }
-        return userRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + id));
+
+        // details에서 userId 추출
+        Object details = authentication.getDetails();
+        Long userId;
+        if (details instanceof Map) {
+            Object id = ((Map<?, ?>) details).get("userId");
+            if (id instanceof Number) {
+                userId = ((Number) id).longValue();
+            } else {
+                throw new IllegalStateException("userId가 유효하지 않습니다.");
+            }
+        } else {
+            // 대안: username으로 DB 조회
+            String username = authentication.getName();
+            User user = userRepository.findByUsername(username)
+                    .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));
+            userId = user.getId();
+        }
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
+        UserDTO userDTO = userMapper.toDto(user);
+        Blog blog = blogRepository.findByUserId(userId).orElse(null);
+        if (blog != null) {
+            userDTO.setBlogId(blog.getId());
+            userDTO.setBlogUrl(blog.getUrl());
+        }
+        return userDTO;
     }
 
-    @Named("userByAuthentication")
-    public User getUserByAuthentication(Authentication authentication) {
-        if (authentication == null) {
-            return null;
-        }
-        String username = authentication.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));
-    }
+
 }

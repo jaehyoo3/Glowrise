@@ -42,25 +42,26 @@ public class CustomSuccessHandler implements AuthenticationSuccessHandler {
             throw new IllegalStateException("지원되지 않는 인증 유형입니다");
         }
 
-        String accessToken = jwtUtil.generateAccessToken(username, role, 60 * 60 * 1000L);
-        String refreshToken = jwtUtil.generateRefreshToken(username, 7 * 24 * 60 * 60 * 1000L);
-
         com.glowrise.domain.User userEntity = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalStateException("사용자를 찾을 수 없습니다: " + username));
+        Long userId = userEntity.getId();
+
+        // 수정: userId를 포함한 토큰 생성
+        String accessToken = jwtUtil.generateAccessToken(userId, username, role, 60 * 60 * 1000L); // 1시간
+        String refreshToken = jwtUtil.generateRefreshToken(username, 7 * 24 * 60 * 60 * 1000L); // 7일
+
         userEntity.setAccessToken(accessToken);
         userEntity.setRefreshToken(refreshToken);
         userRepository.save(userEntity);
 
-        // 쿠키 설정 (선택적)
         response.addCookie(createCookie("Authorization", accessToken));
         response.addCookie(createCookie("RefreshToken", refreshToken));
 
-        // JSON 응답
         Map<String, Object> responseBody = new HashMap<>();
         responseBody.put("accessToken", accessToken);
         responseBody.put("refreshToken", refreshToken);
         responseBody.put("username", username);
-        responseBody.put("userId", userEntity.getId());
+        responseBody.put("userId", userId);
         responseBody.put("message", "로그인 성공");
 
         response.setContentType("application/json");
@@ -68,13 +69,11 @@ public class CustomSuccessHandler implements AuthenticationSuccessHandler {
         response.getWriter().write(new ObjectMapper().writeValueAsString(responseBody));
         response.setStatus(HttpServletResponse.SC_OK);
 
-        // OAuth2일 경우에만 리다이렉트
         if (authentication.getPrincipal() instanceof CustomOAuthUser) {
             String redirectUrl = FRONTEND_REDIRECT_URL + "?accessToken=" + URLEncoder.encode(accessToken, "UTF-8") +
                     "&refreshToken=" + URLEncoder.encode(refreshToken, "UTF-8");
             response.sendRedirect(redirectUrl);
         }
-        // 일반 로그인은 JSON만 반환, 클라이언트에서 처리
     }
 
     private Cookie createCookie(String key, String value) {

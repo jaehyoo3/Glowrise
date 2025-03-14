@@ -4,7 +4,9 @@ import com.glowrise.service.MenuService;
 import com.glowrise.service.UserService;
 import com.glowrise.service.dto.MenuDTO;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,14 +15,47 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/menus")
+@Slf4j
 public class MenuController {
 
     private final MenuService menuService;
 
     @PostMapping
-    public ResponseEntity<MenuDTO> createMenu(@RequestBody MenuDTO dto) {
-        MenuDTO createdMenu = menuService.createMenu(dto);
+    public ResponseEntity<MenuDTO> createMenu(@RequestBody MenuDTO dto, Authentication authentication) {
+        MenuDTO createdMenu = menuService.createMenu(dto, authentication);
         return ResponseEntity.ok(createdMenu);
+    }
+
+    @GetMapping("/blog/{blogId}")
+    public ResponseEntity<List<MenuDTO>> getMenusByBlogId(@PathVariable Long blogId, Authentication authentication) {
+        List<MenuDTO> menus = menuService.getMenusByBlogId(blogId, authentication);
+        return ResponseEntity.ok(menus);
+    }
+
+    @PutMapping("/{blogId}/order")
+    public ResponseEntity<Void> updateMenuOrder(
+            @PathVariable Long blogId,
+            @RequestBody List<MenuDTO> menus,
+            Authentication authentication) {
+        log.info("Received request to update menu order for blogId: {}, menus: {}", blogId, menus);
+
+        // 인증 정보 확인 (선택적)
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("Unauthenticated request to update menu order for blogId: {}", blogId);
+            return ResponseEntity.status(401).build(); // Unauthorized
+        }
+
+        try {
+            menuService.updateMenuOrder(blogId, menus);
+            log.info("Successfully updated menu order for blogId: {}", blogId);
+            return ResponseEntity.ok().build(); // 200 OK
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid request to update menu order: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(null); // 400 Bad Request
+        } catch (Exception e) {
+            log.error("Failed to update menu order for blogId: {}", blogId, e);
+            return ResponseEntity.status(500).build(); // 500 Internal Server Error
+        }
     }
 
     @PutMapping("/{menuId}")
@@ -38,12 +73,6 @@ public class MenuController {
     @GetMapping
     public ResponseEntity<List<MenuDTO>> getAllMenus() {
         List<MenuDTO> menus = menuService.getAllMenus();
-        return ResponseEntity.ok(menus);
-    }
-
-    @GetMapping("/blog/{blogId}")
-    public ResponseEntity<List<MenuDTO>> getMenusByBlogId(@PathVariable Long blogId) {
-        List<MenuDTO> menus = menuService.getMenusByBlogId(blogId);
         return ResponseEntity.ok(menus);
     }
 

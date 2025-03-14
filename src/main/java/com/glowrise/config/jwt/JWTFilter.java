@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.HashMap;
 
 @Component
 @RequiredArgsConstructor
@@ -26,13 +27,13 @@ public class JWTFilter extends OncePerRequestFilter {
     private final UserRepository userRepository;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException {
         String accessToken = getCookieValue(request, "Authorization");
         String refreshToken = getCookieValue(request, "RefreshToken");
         String requestUri = request.getRequestURI();
         System.out.println("Request URI: " + requestUri + ", Access Token: " + (accessToken != null ? "present" : "missing") + ", Refresh Token: " + (refreshToken != null ? "present" : "missing"));
 
-        // 인증이 필요 없는 경로 제외
         if (requestUri.startsWith("/login") || requestUri.startsWith("/api/users/refresh") || requestUri.startsWith("/api/auth/")) {
             System.out.println("Skipping JWT filter for: " + requestUri);
             filterChain.doFilter(request, response);
@@ -54,15 +55,21 @@ public class JWTFilter extends OncePerRequestFilter {
 
             String username = jwtUtil.getUsername(accessToken);
             String role = jwtUtil.getRole(accessToken);
+            Long userId = jwtUtil.getUserId(accessToken); // userId 추출
             User userEntity = userRepository.findByUsername(username).orElseThrow();
 
             UserDTO userDTO = new UserDTO();
-            userDTO.setUserId(userEntity.getId());
+            userDTO.setUserId(userId);
             userDTO.setUsername(username);
             userDTO.setRole(role);
 
             CustomOAuthUser user = new CustomOAuthUser(userDTO);
-            Authentication auth = new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+            // 수정: UsernamePasswordAuthenticationToken으로 선언
+            UsernamePasswordAuthenticationToken auth =
+                    new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
+            auth.setDetails(new HashMap<String, Object>() {{
+                put("userId", userId);
+            }});
             SecurityContextHolder.getContext().setAuthentication(auth);
             filterChain.doFilter(request, response);
         } catch (ExpiredJwtException e) {

@@ -10,6 +10,8 @@ import com.glowrise.service.dto.BlogDTO;
 import com.glowrise.service.mapper.BlogMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -75,6 +77,24 @@ public class BlogService {
         Long userId = getUserIdFromAuthentication(authentication);
         Blog blog = blogRepository.findByUserId(userId).orElse(null);
         return blog != null ? blogMapper.toDto(blog) : null;
+    }
+
+    public ResponseEntity<BlogDTO> getBlogById(Long id, Authentication authentication) {
+        Long userId = getUserIdFromAuthentication(authentication);
+        Blog blog = blogRepository.findById(id).orElse(null);
+
+        if (blog == null) {
+            System.out.println("Blog not found for ID: " + id);
+            return ResponseEntity.notFound().build();
+        }
+
+        // 권한 체크: 자신의 블로그만 조회 가능
+        if (!blog.getUser().getId().equals(userId)) {
+            System.out.println("User " + userId + " not authorized for blog " + id);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        return ResponseEntity.ok(blogMapper.toDto(blog));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
