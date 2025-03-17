@@ -21,6 +21,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -50,7 +51,13 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .addFilterAfter(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .authorizeHttpRequests(authorizeRequests ->
+                        authorizeRequests
+                                .requestMatchers("/api/users/signup", "/login", "/api/users/refresh",
+                                        "/oauth2/authorization/**", "/login/oauth2/code/**", "/h2-console/**", "/h2-console/", "/h2-console")
+                                .permitAll()
+                                .anyRequest().authenticated())
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form
                         .loginProcessingUrl("/login")
                         .usernameParameter("email")
@@ -74,16 +81,12 @@ public class SecurityConfig {
                                 .baseUri("/oauth2/authorization"))
                         .redirectionEndpoint(redirection -> redirection
                                 .baseUri("/login/oauth2/code/*")))
-                .authorizeHttpRequests(authorizeRequests ->
-                        authorizeRequests
-                                .requestMatchers("/api/users/signup", "/login", "/api/users/refresh",
-                                        "/oauth2/authorization/**", "/login/oauth2/code/**", "/h2-console/**")
-                                .permitAll()
-                                .anyRequest().authenticated())
                 .headers(headers -> headers
                         .frameOptions(HeadersConfigurer.FrameOptionsConfig::disable))
                 .sessionManagement(sessionManagement ->
                         sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .securityMatcher(AntPathRequestMatcher.antMatcher("/**"))
+                .securityMatcher(request -> !request.getRequestURI().startsWith("/h2-console"))
                 .build();
     }
     @Bean

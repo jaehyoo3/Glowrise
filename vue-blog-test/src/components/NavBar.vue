@@ -25,7 +25,7 @@
 
             <div class="dropdown-menu" v-if="showUserDropdown">
               <template v-if="hasBlog">
-                <router-link to="/my-blog" class="dropdown-item">내 블로그</router-link>
+                <router-link :to="`/blog/${blogUrl}`" class="dropdown-item">내 블로그</router-link>
                 <router-link to="/profile" class="dropdown-item">프로필 설정</router-link>
               </template>
               <template v-else>
@@ -38,7 +38,7 @@
             </div>
           </div>
 
-          <router-link to="/write" class="write-button">
+          <router-link v-if="hasBlog" :to="`/blog/${blogUrl}/post/create`" class="write-button">
             <i class="fas fa-pen"></i> 글쓰기
           </router-link>
         </template>
@@ -66,11 +66,13 @@ export default {
       isLoggingOut: false,
       isToggling: false,
       hasBlog: false,
-      userId: null
+      userId: null,
+      blogUrl: '', // 블로그 URL 추가
     };
   },
   created() {
-    this.checkLoginStatus(); // 한 번만 호출
+    this.checkLoginStatus();
+    document.addEventListener('click', this.closeDropdown); // 전역 클릭 이벤트 추가
   },
   beforeUnmount() {
     document.removeEventListener('click', this.closeDropdown);
@@ -84,7 +86,7 @@ export default {
         this.userName = user.username;
         this.userId = user.id;
         this.userProfileImage = user.profileImage || '';
-        await this.checkBlogStatus(); // 비동기 호출 최소화
+        await this.checkBlogStatus();
       } else {
         console.log('No valid user, staying logged out');
         this.isLoggedIn = false;
@@ -92,11 +94,11 @@ export default {
         this.userId = null;
         this.userProfileImage = '';
         this.hasBlog = false;
-        // 서버 호출 필요 시 여기서 getCurrentUser 호출
+        this.blogUrl = '';
         try {
           const serverUser = await authService.getCurrentUser();
-          authService.setStoredUser({ id: serverUser.userId, username: serverUser.username });
-          this.checkLoginStatus(); // 재귀 호출 대신 상태 갱신
+          authService.setStoredUser({id: serverUser.userId || serverUser.id, username: serverUser.username});
+          this.checkLoginStatus(); // 사용자 정보 갱신 후 재호출
         } catch (error) {
           console.error('Failed to fetch current user:', error);
         }
@@ -106,17 +108,20 @@ export default {
       if (!this.userId) {
         console.log('No userId, skipping blog status check');
         this.hasBlog = false;
+        this.blogUrl = '';
         return;
       }
       try {
         console.log('Checking blog status for userId:', this.userId);
         const response = await authService.getBlogByUserId();
         this.hasBlog = response !== null && response.id !== undefined;
+        this.blogUrl = response?.url || '';
         console.log('Blog check response:', response);
-        console.log('Has blog:', this.hasBlog);
+        console.log('Has blog:', this.hasBlog, 'Blog URL:', this.blogUrl);
       } catch (error) {
         console.error('블로그 상태 확인 실패:', error);
         this.hasBlog = false;
+        this.blogUrl = '';
       }
     },
     toggleUserDropdown() {
@@ -153,6 +158,7 @@ export default {
         this.userId = null;
         this.userProfileImage = '';
         this.hasBlog = false;
+        this.blogUrl = '';
         this.$router.push('/login');
         alert('로그아웃되었습니다.');
       } catch (error) {
@@ -169,8 +175,8 @@ export default {
           query: { q: this.searchQuery.trim() }
         });
       }
-    }
-  }
+    },
+  },
 };
 </script>
 

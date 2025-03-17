@@ -75,27 +75,10 @@ const authService = {
         }
     },
 
-
-
     signup: async (userData) => {
         const response = await axios.post(`${API_URL}/api/users/signup`, userData);
         console.log('Signup response:', response.data);
         return response.data;
-    },
-
-    logout: async () => {
-        try {
-            const response = await axios.post(`${API_URL}/api/users/logout`);
-            console.log('Logout response:', response.data);
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            localStorage.removeItem('user');
-            delete axios.defaults.headers.common['Authorization'];
-            return response.data;
-        } catch (error) {
-            console.error('Logout failed:', error);
-            throw error;
-        }
     },
 
     getCurrentUser: async () => {
@@ -146,7 +129,6 @@ const authService = {
         localStorage.setItem('user', JSON.stringify(user));
     },
 
-    // 블로그 생성
     createBlog: async (blogData) => {
         const token = localStorage.getItem('accessToken');
         console.log('Access Token for createBlog:', token);
@@ -210,7 +192,6 @@ const authService = {
         }
     },
 
-
     updateBlog: async (blogId, blogData) => {
         const token = localStorage.getItem('accessToken');
         console.log('Access Token for updateBlog:', token);
@@ -248,7 +229,10 @@ const authService = {
         if (!token) throw new Error('No access token available');
         try {
             const response = await axios.post(`${API_URL}/api/menus`, menuData, {
-                headers: { Authorization: `Bearer ${token}` },
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
             });
             console.log('Create menu response:', response.data);
             return response.data;
@@ -258,44 +242,13 @@ const authService = {
         }
     },
 
-    checkMenuUrlAvailability: async (blogId, url) => {
-        const token = localStorage.getItem('accessToken');
-        console.log('Access Token for checkMenuUrlAvailability:', token);
-        try {
-            const response = await axios.get(`${API_URL}/api/menus/check-url?blogId=${blogId}&url=${url}`, {
-                headers: {Authorization: `Bearer ${token}`},
-            });
-            console.log('Check menu URL response:', response.data);
-            return response.data;
-        } catch (error) {
-            console.error('Check menu URL failed:', error);
-            throw error;
-        }
-    },
-    async saveMenuOrder() {
-        if (!this.orderChanged) {
-            alert('변경된 사항이 없습니다.');
-            return;
-        }
-        try {
-            this.isLoading = true;
-            await authService.updateMenuOrder(this.blog.id, this.menus);
-            alert('메뉴 순서가 저장되었습니다.');
-            this.orderChanged = false;
-        } catch (error) {
-            console.error('Failed to update menu order:', error);
-            alert('메뉴 순서 저장 실패: ' + (error.response?.data?.message || error.message));
-        } finally {
-            this.isLoading = false;
-        }
-    },
     updateMenuOrder: async (blogId, menus) => {
         const token = localStorage.getItem('accessToken');
         console.log('Access Token for updateMenuOrder:', token);
         console.log('Sending menus to server:', JSON.stringify(menus));
         if (!token) throw new Error('No access token available');
         try {
-            const response = await axios.put(`${API_URL}/api/menus/order/${blogId}`, menus, {
+            const response = await axios.put(`${API_URL}/api/menus/${blogId}/order`, menus, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json'
@@ -308,6 +261,134 @@ const authService = {
             throw error;
         }
     },
+    createPost: async (postData, files) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('Token before createPost request:', token);
+        if (!token) throw new Error('No access token available');
+
+        const formData = new FormData();
+        formData.append('dto', new Blob([JSON.stringify(postData)], {type: 'application/json'}));
+        if (files) {
+            files.forEach(file => formData.append('files', file));
+        }
+
+        try {
+            console.log('Sending request to:', `${API_URL}/api/posts`);
+            console.log('Request payload:', postData, files);
+            const response = await axios.post(`${API_URL}/api/posts`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    // 'Content-Type'은 FormData가 자동 설정하도록 제거
+                },
+            });
+            console.log('Create post response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Create post failed:', error.response?.status, error.response?.data || error.message);
+            if (error.response?.status === 401 || error.response?.status === 302 || error.response?.data?.includes('Please sign in')) {
+                console.log('Unauthorized detected, redirecting to login');
+                localStorage.clear();
+                window.location.href = `${FRONTEND_URL}/login`;
+            }
+            throw error;
+        }
+    },
+
+    // 메뉴별 게시글 조회
+    getPostsByMenuId: async (menuId) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('Access Token for getPostsByMenuId:', token);
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.get(`${API_URL}/api/posts/menu/${menuId}`, {
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            console.log('Get posts by menu ID response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Get posts by menu ID failed:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+
+    // 게시글 수정
+    updatePost: async (postId, postData, files) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('Access Token for updatePost:', token);
+        if (!token) throw new Error('No access token available');
+
+        const formData = new FormData();
+        formData.append('dto', new Blob([JSON.stringify(postData)], {type: 'application/json'}));
+        if (files) {
+            files.forEach(file => formData.append('files', file));
+        }
+
+        try {
+            const response = await axios.put(`${API_URL}/api/posts/${postId}`, formData, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'Content-Type': 'multipart/form-data'
+                },
+            });
+            console.log('Update post response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Update post failed:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+
+    // 게시글 삭제
+    deletePost: async (postId, userId) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('Access Token for deletePost:', token);
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.delete(`${API_URL}/api/posts/${postId}`, {
+                headers: {Authorization: `Bearer ${token}`},
+                params: {userId},
+            });
+            console.log('Delete post response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Delete post failed:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+
+    // 특정 게시글 조회
+    getPostById: async (postId) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('Access Token for getPostById:', token);
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.get(`${API_URL}/api/posts/${postId}`, {
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            console.log('Get post by ID response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Get post by ID failed:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+    logout: async () => {
+        try {
+            const response = await axios.get(`${API_URL}/api/users/logout`, {
+                headers: {Authorization: `Bearer ${localStorage.getItem('accessToken')}`},
+            });
+            console.log('Logout response:', response.data);
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('user');
+            delete axios.defaults.headers.common['Authorization'];
+            return response.data;
+        } catch (error) {
+            console.error('Logout failed:', error);
+            throw error;
+        }
+    },
+    // saveMenuOrder는 컴포넌트 내 메서드이므로 authService에서 제거
 };
 
 // Axios 인터셉터 설정
@@ -316,10 +397,12 @@ axios.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
         const isUnauthorized = error.response?.status === 401 ||
+            error.response?.status === 302 || // 리다이렉트 감지
             (error.response?.data && typeof error.response.data === 'string' && error.response.data.includes('Please sign in'));
+
         if (isUnauthorized && !originalRequest._retry) {
             originalRequest._retry = true;
-            console.log('401 detected or HTML response, attempting token refresh');
+            console.log('Unauthorized response detected:', error.response?.status, error.response?.data);
             try {
                 const response = await authService.refreshToken();
                 const { accessToken } = response.data;

@@ -4,6 +4,7 @@ import HomeView from '@/views/HomeView.vue';
 import BlogCreateView from '@/views/BlogCreateView.vue';
 import BlogEditView from '@/views/BlogEditView.vue';
 import BlogView from '@/views/BlogView.vue';
+import PostCreate from '@/views/PostCreate.vue'; // 추가
 import authService from '@/services/authService';
 
 const routes = [
@@ -12,8 +13,16 @@ const routes = [
     { path: '/oauth2/redirect', name: 'OAuth2Redirect', component: () => import('@/views/OAuth2RedirectHandler.vue') },
     { path: '/blog/create', name: 'BlogCreate', component: BlogCreateView, meta: { requiresAuth: true } },
     { path: '/blog/edit', name: 'BlogEdit', component: BlogEditView, meta: { requiresAuth: true } },
-    {path: '/blog/edit/:id', component: () => import('../views/BlogEditView.vue')}, // ID 기반 경로
+    {path: '/blog/edit/:id', component: () => import('../views/BlogEditView.vue')},
     { path: '/blog/:url', name: 'Blog', component: BlogView },
+    {path: '/blog/:blogUrl/:menuId', name: 'BlogMenu', component: BlogView, props: true},
+    {
+        path: '/blog/:blogUrl/post/create',
+        name: 'PostCreate',
+        component: PostCreate,
+        props: true,
+        meta: {requiresAuth: true}
+    }, // 추가
     { path: '/:catchAll(.*)', redirect: '/' }
 ];
 

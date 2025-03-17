@@ -24,6 +24,7 @@ public class PostController {
     public ResponseEntity<PostDTO> createPost(
             @RequestPart("dto") PostDTO dto,
             @RequestPart(value = "files", required = false) List<MultipartFile> files) throws IOException {
+        System.out.println("Received POST /api/posts, DTO: " + dto);
         PostDTO createdPost = postService.createPost(dto, files);
         return ResponseEntity.ok(createdPost);
     }

@@ -25,13 +25,7 @@
         <label for="menuName">메뉴 이름</label>
         <input v-model="newMenu.name" class="form-control" id="menuName" required/>
       </div>
-      <div class="form-group">
-        <label for="menuUrl">메뉴 URL</label>
-        <input v-model="newMenu.url" class="form-control" id="menuUrl" @blur="checkMenuUrl" required/>
-        <small v-if="menuUrlError" class="text-danger">{{ menuUrlError }}</small>
-        <small v-else-if="menuUrlAvailable" class="text-success">사용 가능한 URL입니다.</small>
-      </div>
-      <button type="submit" class="btn btn-primary" :disabled="!menuUrlAvailable">메뉴 추가</button>
+      <button type="submit" class="btn btn-primary">메뉴 추가</button>
     </form>
 
     <div v-if="isLoading">로딩 중...</div>
@@ -47,7 +41,7 @@
       >
         <template #item="{ element: menu }">
           <div class="menu-item" :class="{ 'sub-menu': menu.parentId }">
-            <span>{{ menu.name }} ({{ menu.url }}) - Order: {{ menu.orderIndex }}</span>
+            <span>{{ menu.name }} - Order: {{ menu.orderIndex }}</span>
             <small v-if="menu.parentId" class="text-muted"> (Parent: {{ getParentName(menu.parentId) }})</small>
           </div>
         </template>
@@ -71,9 +65,7 @@ export default defineComponent({
       urlAvailable: false,
       urlError: '',
       menus: [],
-      newMenu: {name: '', url: '', blogId: null, orderIndex: null, parentId: null},
-      menuUrlAvailable: false,
-      menuUrlError: '',
+      newMenu: {name: '', blogId: null, orderIndex: null, parentId: null},
       orderChanged: false,
     };
   },
@@ -156,7 +148,6 @@ export default defineComponent({
             ? response.map(menu => ({
               id: menu.id,
               name: menu.name || '',
-              url: menu.url || '',
               orderIndex: menu.orderIndex !== null && menu.orderIndex !== undefined ? menu.orderIndex : 0,
               parentId: menu.parentId || null,
             })).sort((a, b) => a.orderIndex - b.orderIndex)
@@ -169,24 +160,6 @@ export default defineComponent({
         this.isLoading = false;
       }
     },
-    async checkMenuUrl() {
-      this.menuUrlError = '';
-      this.menuUrlAvailable = false;
-      const urlPattern = /^[a-zA-Z0-9-]+$/;
-      if (!urlPattern.test(this.newMenu.url)) {
-        this.menuUrlError = 'URL은 영문, 숫자, 하이픈(-)만 사용할 수 있습니다.';
-        return;
-      }
-      try {
-        const available = await authService.checkMenuUrlAvailability(this.blog.id, this.newMenu.url);
-        this.menuUrlAvailable = available;
-        if (!available) {
-          this.menuUrlError = '이미 사용 중인 URL입니다.';
-        }
-      } catch (error) {
-        this.menuUrlError = 'URL 확인 중 오류가 발생했습니다.';
-      }
-    },
     async addMenu() {
       try {
         console.log('Adding menu with data:', this.newMenu);
@@ -197,17 +170,13 @@ export default defineComponent({
         this.menus.push({
           id: createdMenu.id,
           name: createdMenu.name || this.newMenu.name,
-          url: createdMenu.url || this.newMenu.url,
-          blogId: this.blog.id,
           orderIndex: createdMenu.orderIndex !== null && createdMenu.orderIndex !== undefined ? createdMenu.orderIndex : this.menus.length - 1,
           parentId: createdMenu.parentId || this.newMenu.parentId,
         });
 
         this.newMenu.name = '';
-        this.newMenu.url = '';
         this.newMenu.orderIndex = null;
         this.newMenu.parentId = null;
-        this.menuUrlAvailable = false;
         console.log('Updated menus:', this.menus);
       } catch (error) {
         console.error('Menu addition failed:', error.response?.data || error.message);

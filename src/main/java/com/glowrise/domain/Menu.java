@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "menus")
+@Table(name = "menu")
 @Getter
 @Setter
 public class Menu extends AbstractAuditingEntity<Long> {
@@ -18,13 +18,10 @@ public class Menu extends AbstractAuditingEntity<Long> {
     private Long id;
 
     @Column(nullable = false)
-    private String name;  // 메뉴 이름
-
-    @Column(nullable = false)
-    private String url;  // 메뉴 경로
+    private String name; // 메뉴 이름
 
     @Column
-    private Integer orderIndex;  // 메뉴 순서
+    private Integer orderIndex; // 메뉴 순서
 
     @ManyToOne
     @JoinColumn(name = "blog_id", nullable = false)

@@ -12,7 +12,6 @@ import java.util.Optional;
 @Repository
 public interface MenuRepository extends JpaRepository<Menu, Long> {
     List<Menu> findByBlogId(Long blogId);
-    boolean existsByBlogIdAndUrl(Long blogId, String url);
     List<Menu> findByParentId(Long parentId);
 
     @Query("SELECT COALESCE(MAX(m.orderIndex), -1) FROM Menu m WHERE m.blog.id = :blogId")

@@ -8,7 +8,6 @@ import java.util.List;
 public class MenuDTO {
     private Long id; // 메뉴 ID
     private String name; // 메뉴 이름
-    private String url; // 메뉴 경로
     private Integer orderIndex; // 메뉴 순서
     private Long blogId; // 블로그 ID
     private Long parentId; // 부모 메뉴 ID (없을 수 있음)

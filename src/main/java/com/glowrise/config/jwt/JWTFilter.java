@@ -29,12 +29,12 @@ public class JWTFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String accessToken = getCookieValue(request, "Authorization");
+        String accessToken = getToken(request); // 헤더와 쿠키 모두 확인
         String refreshToken = getCookieValue(request, "RefreshToken");
         String requestUri = request.getRequestURI();
         System.out.println("Request URI: " + requestUri + ", Access Token: " + (accessToken != null ? "present" : "missing") + ", Refresh Token: " + (refreshToken != null ? "present" : "missing"));
 
-        if (requestUri.startsWith("/login") || requestUri.startsWith("/api/users/refresh") || requestUri.startsWith("/api/auth/")) {
+        if (requestUri.startsWith("/login") || requestUri.startsWith("/api/users/refresh") || requestUri.startsWith("/api/auth/") || requestUri.startsWith("/h2-console")) {
             System.out.println("Skipping JWT filter for: " + requestUri);
             filterChain.doFilter(request, response);
             return;
@@ -55,8 +55,7 @@ public class JWTFilter extends OncePerRequestFilter {
 
             String username = jwtUtil.getUsername(accessToken);
             String role = jwtUtil.getRole(accessToken);
-            Long userId = jwtUtil.getUserId(accessToken); // userId 추출
-            User userEntity = userRepository.findByUsername(username).orElseThrow();
+            Long userId = jwtUtil.getUserId(accessToken);
 
             UserDTO userDTO = new UserDTO();
             userDTO.setUserId(userId);
@@ -64,7 +63,6 @@ public class JWTFilter extends OncePerRequestFilter {
             userDTO.setRole(role);
 
             CustomOAuthUser user = new CustomOAuthUser(userDTO);
-            // 수정: UsernamePasswordAuthenticationToken으로 선언
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities());
             auth.setDetails(new HashMap<String, Object>() {{
@@ -78,10 +76,14 @@ public class JWTFilter extends OncePerRequestFilter {
         }
     }
 
-    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + message + "\"}");
+    private String getToken(HttpServletRequest request) {
+        // 1. 헤더에서 확인
+        String bearerToken = request.getHeader("Authorization");
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            return bearerToken.substring(7);
+        }
+        // 2. 쿠키에서 확인
+        return getCookieValue(request, "Authorization");
     }
 
     private String getCookieValue(HttpServletRequest request, String name) {
@@ -92,5 +94,11 @@ public class JWTFilter extends OncePerRequestFilter {
             }
         }
         return null;
+    }
+
+    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"" + message + "\"}");
     }
 }

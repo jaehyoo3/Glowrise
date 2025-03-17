@@ -38,24 +38,9 @@ public class MenuController {
             @RequestBody List<MenuDTO> menus,
             Authentication authentication) {
         log.info("Received request to update menu order for blogId: {}, menus: {}", blogId, menus);
-
-        // 인증 정보 확인 (선택적)
-        if (authentication == null || !authentication.isAuthenticated()) {
-            log.warn("Unauthenticated request to update menu order for blogId: {}", blogId);
-            return ResponseEntity.status(401).build(); // Unauthorized
-        }
-
-        try {
-            menuService.updateMenuOrder(blogId, menus);
-            log.info("Successfully updated menu order for blogId: {}", blogId);
-            return ResponseEntity.ok().build(); // 200 OK
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid request to update menu order: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(null); // 400 Bad Request
-        } catch (Exception e) {
-            log.error("Failed to update menu order for blogId: {}", blogId, e);
-            return ResponseEntity.status(500).build(); // 500 Internal Server Error
-        }
+        menuService.updateMenuOrder(blogId, menus, authentication);
+        log.info("Successfully updated menu order for blogId: {}", blogId);
+        return ResponseEntity.ok().build();
     }
 
     @PutMapping("/{menuId}")
@@ -80,12 +65,6 @@ public class MenuController {
     public ResponseEntity<List<MenuDTO>> getSubMenus(@PathVariable Long menuId) {
         List<MenuDTO> subMenus = menuService.getSubMenus(menuId);
         return ResponseEntity.ok(subMenus);
-    }
-
-    @GetMapping("/check-url")
-    public ResponseEntity<Boolean> checkUrlAvailability(@RequestParam Long blogId, @RequestParam String url) {
-        boolean available = menuService.isUrlAvailable(blogId, url);
-        return ResponseEntity.ok(available);
     }
 
 }
