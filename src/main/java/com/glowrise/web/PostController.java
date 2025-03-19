@@ -25,8 +25,12 @@ public class PostController {
             @RequestPart("dto") PostDTO dto,
             @RequestPart(value = "files", required = false) List<MultipartFile> files) throws IOException {
         System.out.println("Received POST /api/posts, DTO: " + dto);
-        PostDTO createdPost = postService.createPost(dto, files);
-        return ResponseEntity.ok(createdPost);
+        try {
+            PostDTO createdPost = postService.createPost(dto, files);
+            return ResponseEntity.ok(createdPost);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(null); // 400 응답
+        }
     }
 
     @PutMapping(value = "/{postId}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
@@ -62,9 +66,21 @@ public class PostController {
         return ResponseEntity.ok(posts);
     }
 
-    @GetMapping("/{postId}")
+    @GetMapping("/{postId}") // 수정
     public ResponseEntity<PostDTO> getPostById(@PathVariable Long postId) {
+        System.out.println("Received GET /api/posts/" + postId); // 디버깅 로그
         PostDTO post = postService.getPostById(postId);
+        if (post == null) {
+            System.out.println("Post not found for ID: " + postId);
+            return ResponseEntity.notFound().build();
+        }
+        System.out.println("Returning post: " + post);
         return ResponseEntity.ok(post);
+    }
+
+    @GetMapping("/blog/{blogId}")
+    public ResponseEntity<List<PostDTO>> getAllPostsByBlogId(@PathVariable Long blogId) {
+        List<PostDTO> posts = postService.getAllPostsByBlogId(blogId);
+        return ResponseEntity.ok(posts);
     }
 }

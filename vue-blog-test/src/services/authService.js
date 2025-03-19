@@ -315,19 +315,16 @@ const authService = {
     updatePost: async (postId, postData, files) => {
         const token = localStorage.getItem('accessToken');
         console.log('Access Token for updatePost:', token);
-        if (!token) throw new Error('No access token available');
-
         const formData = new FormData();
-        formData.append('dto', new Blob([JSON.stringify(postData)], {type: 'application/json'}));
-        if (files) {
+        formData.append('dto', new Blob([JSON.stringify(postData)], {type: 'application/json'})); // 'postDTO' → 'dto'
+        if (files && files.length > 0) {
             files.forEach(file => formData.append('files', file));
         }
-
         try {
             const response = await axios.put(`${API_URL}/api/posts/${postId}`, formData, {
                 headers: {
                     Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data'
+                    'Content-Type': 'multipart/form-data',
                 },
             });
             console.log('Update post response:', response.data);
@@ -388,7 +385,21 @@ const authService = {
             throw error;
         }
     },
-    // saveMenuOrder는 컴포넌트 내 메서드이므로 authService에서 제거
+    getAllPostsByBlogId: async (blogId) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('Access Token for getAllPostsByBlogId:', token);
+        if (!token) throw new Error('No access token available');
+        try {
+            const response = await axios.get(`${API_URL}/api/posts/blog/${blogId}`, {
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            console.log('Get all posts by blog ID response:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('Get all posts by blog ID failed:', error.response?.data || error.message);
+            throw error;
+        }
+    },
 };
 
 // Axios 인터셉터 설정

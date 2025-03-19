@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -126,6 +127,7 @@ public class MenuService {
             throw new IllegalStateException("해당 블로그를 조회할 권한이 없습니다.");
         }
         List<Menu> menus = menuRepository.findByBlogId(blogId);
+        menus.sort(Comparator.comparing(Menu::getOrderIndex));
         return menus.stream().map(menu -> {
             MenuDTO dto = new MenuDTO();
             dto.setId(menu.getId());

@@ -6,11 +6,14 @@
       <div class="col-md-3">
         <h3>메뉴</h3>
         <ul class="menu-list">
+          <li class="menu-item">
+            <router-link :to="`/${blog.url}`">전체글 보기</router-link>
+          </li>
           <li v-for="menu in rootMenus" :key="menu.id" class="menu-item">
-            <router-link :to="`/blog/${blog.url}/${menu.id}`">{{ menu.name }}</router-link>
+            <router-link :to="`/${blog.url}/${menu.id}`">{{ menu.name }}</router-link>
             <ul v-if="getSubMenus(menu.id).length > 0" class="submenu-list">
               <li v-for="submenu in getSubMenus(menu.id)" :key="submenu.id" class="submenu-item">
-                <router-link :to="`/blog/${blog.url}/${submenu.id}`">{{ submenu.name }}</router-link>
+                <router-link :to="`/${blog.url}/${submenu.id}`">{{ submenu.name }}</router-link>
               </li>
             </ul>
           </li>
@@ -19,31 +22,30 @@
       <div class="col-md-9">
         <h1>{{ blog.title }}</h1>
         <p>{{ blog.description }}</p>
-        <div v-if="selectedMenu">
-          <h2>{{ selectedMenu.name }}</h2>
-          <div v-if="isOwner" class="blog-actions mt-3">
-            <router-link :to="`/blog/${blog.url}/post/create`" class="btn btn-primary">글쓰기</router-link>
+        <div>
+          <h2 v-if="selectedMenu">{{ selectedMenu.name }}</h2>
+          <h2 v-else>전체 게시글</h2>
+          <div v-if="isOwner && !isParentMenu" class="blog-actions mt-3">
+            <router-link :to="`/${blog.url}/post/create${selectedMenu ? '?menuId=' + selectedMenu.id : ''}`"
+                         class="btn btn-primary">글쓰기
+            </router-link>
             <router-link :to="`/blog/edit/${blog.id}`" class="btn btn-secondary ml-2">블로그 수정</router-link>
           </div>
           <div class="post-list mt-4">
             <h3>게시글 목록</h3>
-            <div v-if="posts.length === 0">게시글이 없습니다.</div>
-            <div v-else>
-              <div v-for="post in posts" :key="post.id" class="post-item">
-                <h4>{{ post.title }}</h4>
-                <p>{{ post.content }}</p>
-                <div v-if="post.fileIds && post.fileIds.length > 0">
-                  <p>첨부 파일: {{ post.fileIds.length }}개</p>
-                </div>
+            <div v-if="!posts || posts.length === 0">게시글이 없습니다.</div>
+            <ul v-else class="list-unstyled">
+              <li v-for="post in posts" :key="post.id" class="post-item">
+                <router-link :to="`/${blog.url}/${post.menuId}/${post.id}`">
+                  {{ post.title }} [{{ post.commentCount || 0 }}]
+                </router-link>
                 <div v-if="isOwner" class="post-actions">
+                  <router-link :to="`/post/edit/${post.id}`" class="btn btn-warning btn-sm mr-2">수정</router-link>
                   <button @click="deletePost(post.id)" class="btn btn-danger btn-sm">삭제</button>
                 </div>
-              </div>
-            </div>
+              </li>
+            </ul>
           </div>
-        </div>
-        <div v-else>
-          <p>메뉴를 선택하세요.</p>
         </div>
       </div>
     </div>
@@ -55,6 +57,7 @@
 </template>
 
 <script>
+import {reactive} from 'vue';
 import NavBar from '@/components/NavBar.vue';
 import authService from '@/services/authService';
 
@@ -62,38 +65,51 @@ export default {
   name: 'BlogView',
   components: { NavBar },
   props: {
-    url: String,
     blogUrl: String,
     menuId: String,
+  },
+  setup() {
+    const posts = reactive([]);
+    return {posts};
   },
   data() {
     return {
       blog: null,
       menus: [],
-      posts: [],
       isLoading: true,
       isOwner: false,
       selectedMenu: null,
+      currentMenuId: null,
     };
   },
   async created() {
+    console.log('BlogView created, route params:', this.$route.params);
+    console.log('Props - blogUrl:', this.blogUrl, 'menuId:', this.menuId);
+    this.currentMenuId = this.menuId || this.$route.params.menuId;
     await this.loadBlogAndMenus();
+    await this.loadPosts();
   },
   watch: {
-    menuId: {
-      immediate: true,
-      handler(newMenuId) {
-        if (newMenuId && this.menus.length > 0) {
-          this.loadPosts();
-        }
-      },
+    '$route.params.menuId'(newMenuId) {
+      console.log('Route menuId changed to:', newMenuId);
+      this.currentMenuId = newMenuId;
+      this.loadPosts();
+    },
+  },
+  computed: {
+    rootMenus() {
+      return this.getRootMenus();
+    },
+    isParentMenu() {
+      if (!this.selectedMenu) return false;
+      return this.menus.some(menu => menu.parentId === this.selectedMenu.id);
     },
   },
   methods: {
     async loadBlogAndMenus() {
       try {
         this.isLoading = true;
-        const blogUrl = this.blogUrl || this.url || this.$route.params.url;
+        const blogUrl = this.blogUrl || this.$route.params.blogUrl;
         console.log('Fetching blog with URL:', blogUrl);
 
         const blog = await authService.getBlogByUrl(blogUrl);
@@ -104,55 +120,56 @@ export default {
           this.menus = await authService.getMenusByBlogId(blog.id);
           console.log('Loaded menus:', this.menus);
 
-          if (this.menuId) {
-            this.selectedMenu = this.menus.find(menu => menu.id === Number(this.menuId));
+          const routeMenuId = this.currentMenuId || this.$route.params.menuId;
+          if (routeMenuId) {
+            this.selectedMenu = this.menus.find(menu => menu.id === Number(routeMenuId));
             console.log('Selected menu:', this.selectedMenu);
+            if (!this.selectedMenu) {
+              console.error('No menu found for menuId:', routeMenuId);
+            }
           }
 
           const storedUser = authService.getStoredUser();
           console.log('Stored user from localStorage:', storedUser);
           if (storedUser) {
-            const accessToken = localStorage.getItem('accessToken');
-            console.log('Access token:', accessToken ? 'present' : 'missing');
-            try {
-              console.log('Calling getCurrentUser with token:', accessToken);
-              const user = await authService.getCurrentUser();
-              console.log('Current user from server:', user);
-              if (user && typeof user === 'object' && 'id' in user) {
-                this.isOwner = blog.userId !== null && user.id === blog.userId;
-                console.log('isOwner set to:', this.isOwner);
-              } else {
-                console.log('User object invalid or missing id:', user);
-                this.isOwner = false;
-              }
-            } catch (error) {
-              console.error('사용자 정보 로드 실패:', error);
-              this.isOwner = false;
-              if (error.message === 'No access token available' || (error.response && error.response.status === 401)) {
-                console.log('토큰 문제로 로그인 페이지로 리다이렉트');
-                this.$router.push('/login');
-              }
-            }
+            const user = await authService.getCurrentUser();
+            console.log('Current user from server:', user);
+            this.isOwner = blog.userId !== null && user.id === blog.userId;
+            console.log('isOwner set to:', this.isOwner);
           } else {
-            console.log('저장된 사용자가 없음');
             this.isOwner = false;
           }
         }
       } catch (error) {
-        console.error('블로그 또는 메뉴 로드 실패:', error);
+        console.error('블로그 또는 메뉴 로드 실패:', error.response?.data || error.message);
         this.blog = null;
       } finally {
         this.isLoading = false;
       }
     },
     async loadPosts() {
-      if (!this.menuId) return;
       try {
-        this.posts = await authService.getPostsByMenuId(this.menuId);
-        console.log('Loaded posts:', this.posts);
+        let postsData;
+        const routeMenuId = this.currentMenuId || this.$route.params.menuId;
+        if (routeMenuId) {
+          console.log('Loading posts for menuId:', routeMenuId);
+          postsData = await authService.getPostsByMenuId(routeMenuId);
+          console.log('Raw posts response (menu):', postsData);
+          this.selectedMenu = this.menus.find(menu => menu.id === Number(routeMenuId));
+        } else {
+          console.log('Loading all posts for blogId:', this.blog.id);
+          postsData = await authService.getAllPostsByBlogId(this.blog.id);
+          console.log('Raw posts response (all):', postsData);
+          this.selectedMenu = null;
+        }
+        this.posts.length = 0;
+        if (Array.isArray(postsData)) {
+          postsData.forEach(post => this.posts.push(post));
+        }
+        console.log('Assigned posts:', this.posts);
       } catch (error) {
-        console.error('게시글 로드 실패:', error);
-        this.posts = [];
+        console.error('게시글 로드 실패:', error.response?.data || error.message);
+        this.posts.length = 0;
       }
     },
     async deletePost(postId) {
@@ -160,10 +177,11 @@ export default {
       try {
         const user = await authService.getCurrentUser();
         await authService.deletePost(postId, user.id);
-        this.posts = this.posts.filter(post => post.id !== postId);
+        const index = this.posts.findIndex(post => post.id === postId);
+        if (index !== -1) this.posts.splice(index, 1);
         console.log('Post deleted:', postId);
       } catch (error) {
-        console.error('게시글 삭제 실패:', error);
+        console.error('게시글 삭제 실패:', error.response?.data || error.message);
         alert('게시글 삭제 실패: ' + (error.response?.data?.message || error.message));
       }
     },
@@ -172,11 +190,6 @@ export default {
     },
     getSubMenus(parentId) {
       return this.menus.filter(menu => menu.parentId === parentId);
-    },
-  },
-  computed: {
-    rootMenus() {
-      return this.getRootMenus();
     },
   },
 };
@@ -215,17 +228,23 @@ export default {
 }
 
 .post-item {
-  border: 1px solid #ddd;
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
 }
 
 .post-actions {
-  margin-top: 10px;
+  display: flex;
+  gap: 10px;
 }
 
 .ml-2 {
   margin-left: 10px;
+}
+
+.mr-2 {
+  margin-right: 10px;
 }
 </style>

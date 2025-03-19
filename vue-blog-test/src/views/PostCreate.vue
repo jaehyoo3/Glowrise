@@ -9,7 +9,12 @@
           <label for="menuSelect">메뉴 선택 (필수)</label>
           <select v-model="newPost.menuId" class="form-control" id="menuSelect" required>
             <option value="" disabled>메뉴를 선택하세요</option>
-            <option v-for="menu in allMenus" :key="menu.id" :value="menu.id">
+            <option
+                v-for="menu in allMenus"
+                :key="menu.id"
+                :value="menu.id"
+                :disabled="isParentMenu(menu.id)"
+            >
               {{ menu.name }} {{ menu.parentId ? `(하위: ${getParentName(menu.parentId)})` : '' }}
             </option>
           </select>
@@ -70,18 +75,18 @@ export default {
         console.log('Fetching blog with URL:', blogUrl);
 
         this.blog = await authService.getBlogByUrl(blogUrl);
-        console.log('Loaded blog:', this.blog);
+        console.log('Loaded blog:', JSON.stringify(this.blog));
 
         if (this.blog) {
           this.menus = await authService.getMenusByBlogId(this.blog.id);
-          console.log('Loaded menus:', this.menus);
+          console.log('Loaded menus:', JSON.stringify(this.menus));
           this.allMenus = this.flattenMenus(this.menus);
+          console.log('Flattened allMenus:', JSON.stringify(this.allMenus));
 
           const user = await authService.getCurrentUser();
-          console.log('Current user:', user);
+          console.log('Current user:', JSON.stringify(user));
           if (user && user.id) {
             this.newPost.userId = user.id;
-            // 블로그 소유자가 없거나 (null) 현재 사용자와 일치하면 허용
             if (this.blog.userId && this.blog.userId !== user.id) {
               throw new Error('이 블로그에 게시글을 작성할 권한이 없습니다.');
             }
@@ -94,6 +99,11 @@ export default {
             this.newPost.menuId = Number(queryMenuId);
             console.log('Pre-selected menuId from query:', this.newPost.menuId);
           }
+
+          // 부모 메뉴 확인 로그
+          this.allMenus.forEach(menu => {
+            console.log(`Menu ${menu.id} (${menu.name}) is parent: ${this.isParentMenu(menu.id)}`);
+          });
         }
       } catch (error) {
         console.error('블로그 또는 메뉴 로드 실패:', error);
@@ -116,8 +126,11 @@ export default {
       return result;
     },
     getParentName(parentId) {
-      const parent = this.menus.find(menu => menu.id === parentId);
+      const parent = this.allMenus.find(menu => menu.id === parentId);
       return parent ? parent.name : '';
+    },
+    isParentMenu(menuId) {
+      return this.allMenus.some(menu => menu.parentId === menuId);
     },
     handleFileChange(event) {
       this.postFiles = Array.from(event.target.files);
@@ -132,7 +145,7 @@ export default {
       try {
         const postData = {...this.newPost};
         const createdPost = await authService.createPost(postData, this.postFiles);
-        console.log('Created post:', createdPost);
+        console.log('Created post:', JSON.stringify(createdPost));
         this.$router.push(`/blog/${this.blog.url}/${this.newPost.menuId}`);
       } catch (error) {
         console.error('게시글 작성 실패:', error);
@@ -165,5 +178,10 @@ export default {
 
 .ml-2 {
   margin-left: 10px;
+}
+
+#menuSelect option:disabled {
+  color: #888;
+  font-style: italic;
 }
 </style>

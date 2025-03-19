@@ -10,4 +10,6 @@ import java.util.List;
 public interface PostRepository extends JpaRepository<Post, Long> {
     List<Post> findByMenuId(Long menuId);
     List<Post> findByAuthorId(Long userId);
+
+    List<Post> findByMenuIdIn(List<Long> menuIds);
 }

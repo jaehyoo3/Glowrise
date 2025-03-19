@@ -25,7 +25,7 @@
             </div>
             <div v-else>
               <p>{{ blog.title }}</p>
-              <router-link :to="`/blog/${blog.url}`" class="btn btn-success">내 블로그 가기</router-link>
+              <router-link :to="`/${blog.url}`" class="btn btn-success">내 블로그 가기</router-link>
               <router-link :to="`/blog/edit/${blog.id}`" class="btn btn-secondary ms-2">블로그 수정</router-link>
             </div>
           </div>
