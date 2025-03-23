@@ -400,6 +400,27 @@ const authService = {
             throw error;
         }
     },
+    getCommentsByPostId: async (postId) => {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get(`${API_URL}/api/comments/post/${postId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    },
+    createComment: async (commentData) => {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.post(`${API_URL}/api/comments`, commentData, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    },
+    createReply: async (parentId, replyData) => {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.post(`${API_URL}/api/comments/${parentId}/reply`, replyData, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+    },
 };
 
 // Axios 인터셉터 설정
