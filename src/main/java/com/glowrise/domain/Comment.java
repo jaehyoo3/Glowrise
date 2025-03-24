@@ -26,7 +26,7 @@ public class Comment extends AbstractAuditingEntity<Long> {
 
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
-    private User author;
+    private User user;
 
     @ManyToOne
     @JoinColumn(name = "parent_id")

@@ -1,5 +1,7 @@
 package com.glowrise.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.glowrise.domain.Comment;
 import com.glowrise.domain.Post;
 import com.glowrise.domain.User;
@@ -9,12 +11,17 @@ import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.CommentDTO;
 import com.glowrise.service.mapper.CommentMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CommentService {
 
     private final CommentRepository commentRepository;
@@ -22,54 +29,57 @@ public class CommentService {
     private final PostRepository postRepository;
     private final UserRepository userRepository;
 
-    // 댓글 생성
-    public CommentDTO createComment(CommentDTO dto) {
+    public CommentDTO createComment(CommentDTO dto, Authentication authentication) {
+        Long userId = getUserIdFromAuthentication(authentication);
         Post post = postRepository.findById(dto.getPostId())
                 .orElseThrow(() -> new IllegalArgumentException("게시글을 찾을 수 없습니다: " + dto.getPostId()));
 
-        User author = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + dto.getUserId()));
+        User author = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
 
         Comment comment = commentMapper.toEntity(dto);
         comment.setPost(post);
-        comment.setAuthor(author);
-        comment.setParent(null); // 일반 댓글은 부모가 없음
+        comment.setUser(author);
+        comment.setParent(null);
 
         Comment savedComment = commentRepository.save(comment);
-        return commentMapper.toDto(savedComment);
+        CommentDTO result = commentMapper.toDto(savedComment);
+        result.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
+        return result;
     }
 
-    // 답글 생성
-    public CommentDTO createReply(Long parentId, CommentDTO dto) {
+    public CommentDTO createReply(Long parentId, CommentDTO dto, Authentication authentication) {
+        Long userId = getUserIdFromAuthentication(authentication);
         Post post = postRepository.findById(dto.getPostId())
                 .orElseThrow(() -> new IllegalArgumentException("게시글을 찾을 수 없습니다: " + dto.getPostId()));
 
-        User author = userRepository.findById(dto.getUserId())
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + dto.getUserId()));
+        User author = userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
 
         Comment parent = commentRepository.findById(parentId)
                 .orElseThrow(() -> new IllegalArgumentException("부모 댓글을 찾을 수 없습니다: " + parentId));
 
-        // 부모 댓글이 같은 게시글에 속하는지 확인
         if (!parent.getPost().getId().equals(dto.getPostId())) {
             throw new IllegalStateException("부모 댓글은 같은 게시글에 속해야 합니다.");
         }
 
         Comment reply = commentMapper.toEntity(dto);
         reply.setPost(post);
-        reply.setAuthor(author);
+        reply.setUser(author);
         reply.setParent(parent);
 
         Comment savedReply = commentRepository.save(reply);
-        return commentMapper.toDto(savedReply);
+        CommentDTO result = commentMapper.toDto(savedReply);
+        result.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
+        return result;
     }
 
-    // 댓글 수정
-    public CommentDTO updateComment(Long commentId, CommentDTO dto) {
+    public CommentDTO updateComment(Long commentId, CommentDTO dto, Authentication authentication) {
+        Long userId = getUserIdFromAuthentication(authentication);
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("댓글을 찾을 수 없습니다: " + commentId));
 
-        if (!comment.getAuthor().getId().equals(dto.getUserId())) {
+        if (!comment.getUser().getId().equals(userId)) {
             throw new IllegalStateException("댓글을 수정할 권한이 없습니다.");
         }
 
@@ -77,19 +87,20 @@ public class CommentService {
             throw new IllegalStateException("삭제된 댓글은 수정할 수 없습니다.");
         }
 
-        // 내용만 업데이트
         commentMapper.partialUpdate(comment, dto);
 
         Comment updatedComment = commentRepository.save(comment);
-        return commentMapper.toDto(updatedComment);
+        CommentDTO result = commentMapper.toDto(updatedComment);
+        result.setAuthorName(comment.getUser().getNickName() != null ? comment.getUser().getNickName() : comment.getUser().getUsername());
+        return result;
     }
 
-    // 댓글 삭제 (논리적 삭제)
-    public void deleteComment(Long commentId, Long userId) {
+    public void deleteComment(Long commentId, Long userId, Authentication authentication) {
+        getUserIdFromAuthentication(authentication); // 로그인 체크
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("댓글을 찾을 수 없습니다: " + commentId));
 
-        if (!comment.getAuthor().getId().equals(userId)) {
+        if (!comment.getUser().getId().equals(userId)) {
             throw new IllegalStateException("댓글을 삭제할 권한이 없습니다.");
         }
 
@@ -99,22 +110,70 @@ public class CommentService {
         }
     }
 
-    // 게시글별 댓글 목록 조회
     public List<CommentDTO> getCommentsByPostId(Long postId) {
+        if (postId == null) {
+            throw new IllegalArgumentException("게시글 ID는 null일 수 없습니다.");
+        }
         List<Comment> comments = commentRepository.findByPostId(postId);
-        return commentMapper.toDto(comments);
+        // 루트 댓글만 반환
+        return comments.stream()
+                .filter(comment -> comment.getParent() == null)
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
     }
 
-    // 특정 댓글의 답글 목록 조회
+    private CommentDTO convertToDto(Comment comment) {
+        CommentDTO dto = commentMapper.toDto(comment);
+        dto.setPostId(comment.getPost() != null ? comment.getPost().getId() : null);
+        dto.setUserId(comment.getUser() != null ? comment.getUser().getId() : null);
+        dto.setParentId(comment.getParent() != null ? comment.getParent().getId() : null); // parentId 설정
+
+        Long userId = dto.getUserId();
+        if (userId != null) {
+            User author = userRepository.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("사용자 ID " + userId + "를 찾을 수 없습니다."));
+            dto.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
+            dto.setEmail(author.getEmail());
+        } else {
+            dto.setAuthorName("익명");
+        }
+
+        if (comment.getReplies() != null && !comment.getReplies().isEmpty()) {
+            List<CommentDTO> replyDtos = comment.getReplies().stream()
+                    .map(this::convertToDto)
+                    .collect(Collectors.toList());
+            dto.setReplies(replyDtos);
+        }
+
+        return dto;
+    }
+
     public List<CommentDTO> getRepliesByCommentId(Long commentId) {
         List<Comment> replies = commentRepository.findByParentId(commentId);
-        return commentMapper.toDto(replies);
+        return replies.stream().map(comment -> {
+            CommentDTO dto = commentMapper.toDto(comment);
+            User author = userRepository.findById(dto.getUserId())
+                    .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + dto.getUserId()));
+            dto.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
+            return dto;
+        }).collect(Collectors.toList());
     }
 
-    // 특정 댓글 조회
     public CommentDTO getCommentById(Long commentId) {
         Comment comment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new IllegalArgumentException("댓글을 찾을 수 없습니다: " + commentId));
-        return commentMapper.toDto(comment);
+        CommentDTO result = commentMapper.toDto(comment);
+        result.setAuthorName(comment.getUser().getNickName() != null ? comment.getUser().getNickName() : comment.getUser().getUsername());
+        return result;
+    }
+
+    private Long getUserIdFromAuthentication(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new IllegalStateException("로그인이 필요합니다.");
+        }
+        String username = authentication.getName();
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));
+        return user.getId();
     }
 }

@@ -80,6 +80,7 @@ export default {
       isOwner: false,
       selectedMenu: null,
       currentMenuId: null,
+      currentUser: null, // 현재 사용자 정보 추가
     };
   },
   async created() {
@@ -129,20 +130,21 @@ export default {
             }
           }
 
-          const storedUser = authService.getStoredUser();
-          console.log('Stored user from localStorage:', storedUser);
-          if (storedUser) {
-            const user = await authService.getCurrentUser();
-            console.log('Current user from server:', user);
-            this.isOwner = blog.userId !== null && user.id === blog.userId;
-            console.log('isOwner set to:', this.isOwner);
-          } else {
-            this.isOwner = false;
-          }
+          // 현재 사용자 정보 가져오기
+          this.currentUser = await authService.getCurrentUser();
+          console.log('Current user from server:', this.currentUser);
+          this.isOwner = blog.userId !== null && this.currentUser?.id === blog.userId;
+          console.log('isOwner set to:', this.isOwner);
         }
       } catch (error) {
         console.error('블로그 또는 메뉴 로드 실패:', error.response?.data || error.message);
-        this.blog = null;
+        if (error.response?.status === 404) {
+          this.$router.push('/404');
+        } else if (error.response?.status === 403) {
+          this.$router.push('/unauthorized');
+        } else {
+          this.blog = null;
+        }
       } finally {
         this.isLoading = false;
       }
@@ -173,10 +175,13 @@ export default {
       }
     },
     async deletePost(postId) {
+      if (!this.isOwner) {
+        alert('게시글을 삭제할 권한이 없습니다.');
+        return;
+      }
       if (!confirm('정말 삭제하시겠습니까?')) return;
       try {
-        const user = await authService.getCurrentUser();
-        await authService.deletePost(postId, user.id);
+        await authService.deletePost(postId, this.currentUser.id);
         const index = this.posts.findIndex(post => post.id === postId);
         if (index !== -1) this.posts.splice(index, 1);
         console.log('Post deleted:', postId);
@@ -186,9 +191,14 @@ export default {
       }
     },
     getRootMenus() {
+      if (!Array.isArray(this.menus)) {
+        console.error('Menus is not an array:', this.menus);
+        return [];
+      }
       return this.menus.filter(menu => !menu.parentId);
     },
     getSubMenus(parentId) {
+      if (!Array.isArray(this.menus)) return [];
       return this.menus.filter(menu => menu.parentId === parentId);
     },
   },

@@ -4,15 +4,17 @@ import com.glowrise.service.PostService;
 import com.glowrise.service.UserService;
 import com.glowrise.service.dto.PostDTO;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.List;
-
 @RestController
 @RequestMapping("/api/posts")
 @RequiredArgsConstructor
@@ -23,13 +25,15 @@ public class PostController {
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<PostDTO> createPost(
             @RequestPart("dto") PostDTO dto,
-            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws IOException {
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            Authentication authentication) throws IOException {
+        checkAuthentication(authentication);
         System.out.println("Received POST /api/posts, DTO: " + dto);
         try {
-            PostDTO createdPost = postService.createPost(dto, files);
+            PostDTO createdPost = postService.createPost(dto, files, authentication);
             return ResponseEntity.ok(createdPost);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(null); // 400 응답
+            return ResponseEntity.badRequest().body(null);
         }
     }
 
@@ -37,14 +41,20 @@ public class PostController {
     public ResponseEntity<PostDTO> updatePost(
             @PathVariable Long postId,
             @RequestPart("dto") PostDTO dto,
-            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws IOException {
-        PostDTO updatedPost = postService.updatePost(postId, dto, files);
+            @RequestPart(value = "files", required = false) List<MultipartFile> files,
+            Authentication authentication) throws IOException {
+        checkAuthentication(authentication);
+        PostDTO updatedPost = postService.updatePost(postId, dto, files, authentication);
         return ResponseEntity.ok(updatedPost);
     }
 
     @DeleteMapping("/{postId}")
-    public ResponseEntity<Void> deletePost(@PathVariable Long postId, @RequestParam Long userId) {
-        postService.deletePost(postId, userId);
+    public ResponseEntity<Void> deletePost(
+            @PathVariable Long postId,
+            @RequestParam Long userId,
+            Authentication authentication) {
+        checkAuthentication(authentication);
+        postService.deletePost(postId, userId, authentication);
         return ResponseEntity.noContent().build();
     }
 
@@ -66,9 +76,9 @@ public class PostController {
         return ResponseEntity.ok(posts);
     }
 
-    @GetMapping("/{postId}") // 수정
+    @GetMapping("/{postId}")
     public ResponseEntity<PostDTO> getPostById(@PathVariable Long postId) {
-        System.out.println("Received GET /api/posts/" + postId); // 디버깅 로그
+        System.out.println("Received GET /api/posts/" + postId);
         PostDTO post = postService.getPostById(postId);
         if (post == null) {
             System.out.println("Post not found for ID: " + postId);
@@ -82,5 +92,11 @@ public class PostController {
     public ResponseEntity<List<PostDTO>> getAllPostsByBlogId(@PathVariable Long blogId) {
         List<PostDTO> posts = postService.getAllPostsByBlogId(blogId);
         return ResponseEntity.ok(posts);
+    }
+
+    private void checkAuthentication(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
+        }
     }
 }

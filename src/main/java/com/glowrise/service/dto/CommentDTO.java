@@ -17,7 +17,13 @@ public class CommentDTO {
 
     private Long userId;
 
-    private List<Comment> replies = new ArrayList<>();
+    private Long parentId; // 추가
+
+    private String authorName; // 추가
+
+    private String email; // 추가
+
+    private List<CommentDTO> replies = new ArrayList<>(); // List<Comment> -> List<CommentDTO>
 
     private boolean deleted;
 }

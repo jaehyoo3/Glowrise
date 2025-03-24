@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -49,7 +48,8 @@ public class BlogService {
         Blog savedBlog = blogRepository.save(blog);
         return blogMapper.toDto(savedBlog);
     }
-    @Transactional  // 🛠️ 트랜잭션 추가
+
+    @Transactional
     public Optional<BlogDTO> updateBlog(Long blogId, BlogDTO dto, Authentication authentication) {
         Long userId = getUserIdFromAuthentication(authentication);
 
@@ -63,8 +63,6 @@ public class BlogService {
                     if (dto.getUrl() != null && !dto.getUrl().equals(existingBlog.getUrl()) && blogRepository.existsByUrl(dto.getUrl())) {
                         throw new IllegalArgumentException("이미 사용 중인 URL입니다: " + dto.getUrl());
                     }
-                    // DTO에 blogId 설정
-
                     // 부분 업데이트
                     blogMapper.partialUpdate(existingBlog, dto);
                     return existingBlog;
@@ -79,22 +77,14 @@ public class BlogService {
         return blog != null ? blogMapper.toDto(blog) : null;
     }
 
-    public ResponseEntity<BlogDTO> getBlogById(Long id, Authentication authentication) {
-        Long userId = getUserIdFromAuthentication(authentication);
+    // 조회 권한 체크 제거
+    public BlogDTO getBlogById(Long id) {
         Blog blog = blogRepository.findById(id).orElse(null);
-
         if (blog == null) {
-            System.out.println("Blog not found for ID: " + id);
-            return ResponseEntity.notFound().build();
+            log.info("Blog not found for ID: {}", id);
+            return null;
         }
-
-        // 권한 체크: 자신의 블로그만 조회 가능
-        if (!blog.getUser().getId().equals(userId)) {
-            System.out.println("User " + userId + " not authorized for blog " + id);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        return ResponseEntity.ok(blogMapper.toDto(blog));
+        return blogMapper.toDto(blog);
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -106,11 +96,12 @@ public class BlogService {
             throw new IllegalStateException("해당 블로그를 삭제할 권한이 없습니다.");
         }
         User user = blog.getUser();
-        user.setBlog(null);  // 🚨 User에서 Blog 참조 삭제
+        user.setBlog(null);
 
         blogRepository.deleteById(blogId);
-        log.info("After delete - exists: {}", blogRepository.existsById(blogId)); // 삭제 여부 확인
+        log.info("After delete - exists: {}", blogRepository.existsById(blogId));
     }
+
     public List<BlogDTO> getAllBlogs() {
         List<Blog> blogs = blogRepository.findAll();
         return blogMapper.toDto(blogs);
@@ -126,12 +117,14 @@ public class BlogService {
     }
 
     public BlogDTO getBlogByUrl(String url) {
-        Blog blog = blogRepository.findByUrl(url)
-                .orElse(null);
+        Blog blog = blogRepository.findByUrl(url).orElse(null);
         return blog != null ? blogMapper.toDto(blog) : null;
     }
 
     private Long getUserIdFromAuthentication(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
+            throw new IllegalStateException("로그인이 필요합니다.");
+        }
         String username = authentication.getName();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));

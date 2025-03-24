@@ -15,12 +15,13 @@ export default {
       post: null,
       allMenus: [],
       comments: [],
-      newComment: { content: '', postId: null, userId: null, authorName: '' }, // authorName 추가
-      newReply: { content: '', postId: null, userId: null, authorName: '' },   // authorName 추가
+      newComment: {content: '', postId: null, userId: null, authorName: ''},
+      newReply: {content: '', postId: null, userId: null, authorName: ''},
       replyingTo: null,
       isLoading: true,
       isSubmitting: false,
-      currentUser: null, // 현재 사용자 정보 저장
+      currentUser: null,
+      showEmailDropdown: null,
     };
   },
   watch: {
@@ -61,7 +62,6 @@ export default {
         const commentsResponse = await authService.getCommentsByPostId(this.postId);
         this.comments = this.processComments(commentsResponse);
 
-        // 현재 사용자 정보 가져오기
         this.currentUser = await authService.getCurrentUser();
         this.newComment.postId = this.postId;
         this.newComment.userId = this.currentUser.id;
@@ -99,19 +99,20 @@ export default {
     },
 
     processComments(comments) {
-      const commentMap = new Map();
+      console.log('Raw comments from API:', JSON.stringify(comments, null, 2));
       comments.forEach(comment => {
-        comment.replies = [];
-        comment.authorName = comment.authorName || 'Unknown'; // 백엔드에서 authorName 없으면 기본값
-        commentMap.set(comment.id, comment);
-      });
-      comments.forEach(comment => {
-        if (comment.parentId) {
-          const parent = commentMap.get(comment.parentId);
-          if (parent) parent.replies.push(comment);
+        comment.authorName = comment.authorName || 'Unknown';
+        comment.email = comment.email || 'N/A';
+        if (comment.replies && comment.replies.length > 0) {
+          comment.replies.forEach(reply => {
+            reply.authorName = reply.authorName || 'Unknown';
+            reply.email = reply.email || 'N/A';
+          });
         }
       });
-      return comments.filter(comment => !comment.parentId && !comment.deleted);
+      const filteredComments = comments.filter(comment => !comment.deleted);
+      console.log('Processed comments:', JSON.stringify(filteredComments, null, 2));
+      return filteredComments;
     },
 
     async submitComment() {
@@ -126,7 +127,8 @@ export default {
         this.comments.push({
           ...createdComment,
           replies: [],
-          authorName: this.currentUser.nickName || this.currentUser.username
+          authorName: this.currentUser.nickName || this.currentUser.username,
+          email: this.currentUser.email || 'N/A'
         });
         this.newComment.content = '';
       } catch (error) {
@@ -155,7 +157,8 @@ export default {
         if (parentComment) {
           parentComment.replies.push({
             ...createdReply,
-            authorName: this.currentUser.nickName || this.currentUser.username
+            authorName: this.currentUser.nickName || this.currentUser.username,
+            email: this.currentUser.email || 'N/A'
           });
         }
         this.replyingTo = null;
@@ -173,22 +176,15 @@ export default {
       this.newReply.content = '';
     },
 
-    async getCurrentUserId() {
-      const user = await authService.getCurrentUser();
-      return user.id;
-    },
-
-    // "이름(아이디)" 형식으로 작성자 이름 반환
-    getAuthorDisplay(comment) {
-      const name = comment.authorName || 'Unknown';
-      const id = comment.userId || 'N/A';
-      return `${name} (${id})`;
+    toggleEmailDropdown(commentId) {
+      this.showEmailDropdown = this.showEmailDropdown === commentId ? null : commentId;
     },
 
     getParentName(parentId) {
       const parent = this.allMenus.find(menu => menu.id === parentId);
       return parent ? parent.name : '';
     },
+
     isParentMenu(menuId) {
       return this.allMenus.some(menu => menu.parentId === menuId);
     },
@@ -226,7 +222,16 @@ export default {
         <div v-else>
           <div v-for="comment in comments" :key="comment.id" class="comment" :class="{ 'reply': comment.parentId }">
             <p>{{ comment.content }}</p>
-            <small>작성자: {{ getAuthorDisplay(comment) }} | {{ comment.createdDate }}</small>
+            <small>
+              작성자:
+              <span class="author-name" @click="toggleEmailDropdown(comment.id)">
+                {{ comment.authorName }}
+              </span>
+              <div v-if="showEmailDropdown === comment.id" class="email-dropdown">
+                {{ comment.email }}
+              </div>
+              | {{ comment.createdDate }}
+            </small>
             <button @click="showReplyForm(comment.id)" class="btn btn-sm btn-link">답글</button>
             <div v-if="replyingTo === comment.id" class="reply-form mt-2">
               <textarea v-model="newReply.content" placeholder="답글을 입력하세요" class="form-control"></textarea>
@@ -236,7 +241,16 @@ export default {
             <div v-if="comment.replies && comment.replies.length > 0" class="replies">
               <div v-for="reply in comment.replies" :key="reply.id" class="comment reply">
                 <p>{{ reply.content }}</p>
-                <small>작성자: {{ getAuthorDisplay(reply) }} | {{ reply.createdDate }}</small>
+                <small>
+                  작성자:
+                  <span class="author-name" @click="toggleEmailDropdown(reply.id)">
+                    {{ reply.authorName }}
+                  </span>
+                  <div v-if="showEmailDropdown === reply.id" class="email-dropdown">
+                    {{ reply.email }}
+                  </div>
+                  | {{ reply.createdDate }}
+                </small>
               </div>
             </div>
           </div>
@@ -307,5 +321,26 @@ export default {
 #menuSelect option:disabled {
   color: #888;
   font-style: italic;
+}
+
+.author-name {
+  cursor: pointer;
+  color: #007bff;
+  position: relative;
+}
+
+.author-name:hover {
+  text-decoration: underline;
+}
+
+.email-dropdown {
+  position: absolute;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  padding: 5px 10px;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  margin-top: 5px;
 }
 </style>
