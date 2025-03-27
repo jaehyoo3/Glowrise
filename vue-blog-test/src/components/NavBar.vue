@@ -2,13 +2,13 @@
   <div class="navbar">
     <div class="container">
       <div class="navbar-brand">
-        <router-link to="/" class="logo">Blog Platform</router-link>
+        <router-link to="/" class="logo">Glowrise</router-link>
       </div>
 
       <div class="search-bar">
         <input
             type="text"
-            placeholder="검색어를 입력하세요"
+            placeholder="검색"
             v-model="searchQuery"
             @keyup.enter="handleSearch"
         >
@@ -19,28 +19,53 @@
 
       <div class="navbar-menu">
         <template v-if="isLoggedIn">
-          <div class="user-menu" @click.stop="toggleUserDropdown">
+          <div
+              class="user-menu"
+              @click.stop="toggleUserDropdown"
+          >
             <span class="user-name">{{ userName }}</span>
             <i class="fas fa-chevron-down"></i>
 
-            <div class="dropdown-menu" v-if="showUserDropdown">
+            <div
+                v-if="showUserDropdown"
+                class="dropdown-menu"
+                @click.stop
+            >
               <template v-if="hasBlog">
-                <router-link :to="`/blog/${blogUrl}`" class="dropdown-item">내 블로그</router-link>
-                <router-link to="/profile" class="dropdown-item">프로필 설정</router-link>
+                <router-link
+                    :to="`/${blogUrl}`"
+                    class="dropdown-item"
+                    @click="closeDropdown"
+                >
+                  내 블로그
+                </router-link>
+                <router-link
+                    to="/profile"
+                    class="dropdown-item"
+                    @click="closeDropdown"
+                >
+                  프로필
+                </router-link>
               </template>
               <template v-else>
-                <router-link to="/blog/create" class="dropdown-item" @click.stop="logNavigation">블로그 생성하기</router-link>
+                <router-link
+                    to="/blog/create"
+                    class="dropdown-item"
+                    @click="closeDropdown"
+                >
+                  블로그 만들기
+                </router-link>
               </template>
               <div class="dropdown-divider"></div>
-              <button @click.stop="handleLogout" class="dropdown-item" :disabled="isLoggingOut">
+              <button
+                  @click="handleLogout"
+                  class="dropdown-item"
+                  :disabled="isLoggingOut"
+              >
                 {{ isLoggingOut ? '로그아웃 중...' : '로그아웃' }}
               </button>
             </div>
           </div>
-
-          <router-link v-if="hasBlog" :to="`/blog/${blogUrl}/post/create`" class="write-button">
-            <i class="fas fa-pen"></i> 글쓰기
-          </router-link>
         </template>
 
         <template v-else>
@@ -50,7 +75,6 @@
     </div>
   </div>
 </template>
-
 <script>
 import authService from '@/services/authService';
 
@@ -64,23 +88,37 @@ export default {
       userName: '',
       userProfileImage: '',
       isLoggingOut: false,
-      isToggling: false,
       hasBlog: false,
       userId: null,
-      blogUrl: '', // 블로그 URL 추가
+      blogUrl: '',
     };
+  },
+  mounted() {
+    document.addEventListener('click', this.handleOutsideClick);
+  },
+  beforeUnmount() {
+    document.removeEventListener('click', this.handleOutsideClick);
   },
   created() {
     this.checkLoginStatus();
-    document.addEventListener('click', this.closeDropdown); // 전역 클릭 이벤트 추가
-  },
-  beforeUnmount() {
-    document.removeEventListener('click', this.closeDropdown);
   },
   methods: {
+    handleOutsideClick(event) {
+      const userMenu = this.$el.querySelector('.user-menu');
+      if (userMenu && !userMenu.contains(event.target)) {
+        console.log('Clicked outside, closing dropdown');
+        this.showUserDropdown = false;
+      }
+    },
+    toggleUserDropdown() {
+      console.log('Toggling user dropdown, current state:', this.showUserDropdown);
+      this.showUserDropdown = !this.showUserDropdown;
+    },
+    closeDropdown() {
+      this.showUserDropdown = false;
+    },
     async checkLoginStatus() {
       const user = authService.getStoredUser();
-      console.log('Stored User:', user);
       if (user) {
         this.isLoggedIn = true;
         this.userName = user.username;
@@ -88,7 +126,6 @@ export default {
         this.userProfileImage = user.profileImage || '';
         await this.checkBlogStatus();
       } else {
-        console.log('No valid user, staying logged out');
         this.isLoggedIn = false;
         this.userName = '';
         this.userId = null;
@@ -98,56 +135,27 @@ export default {
         try {
           const serverUser = await authService.getCurrentUser();
           authService.setStoredUser({id: serverUser.userId || serverUser.id, username: serverUser.username});
-          this.checkLoginStatus(); // 사용자 정보 갱신 후 재호출
+          this.checkLoginStatus();
         } catch (error) {
-          console.error('Failed to fetch current user:', error);
+          console.error('현재 사용자 정보 가져오기 실패:', error);
         }
       }
     },
     async checkBlogStatus() {
       if (!this.userId) {
-        console.log('No userId, skipping blog status check');
         this.hasBlog = false;
         this.blogUrl = '';
         return;
       }
       try {
-        console.log('Checking blog status for userId:', this.userId);
         const response = await authService.getBlogByUserId();
         this.hasBlog = response !== null && response.id !== undefined;
         this.blogUrl = response?.url || '';
-        console.log('Blog check response:', response);
-        console.log('Has blog:', this.hasBlog, 'Blog URL:', this.blogUrl);
       } catch (error) {
         console.error('블로그 상태 확인 실패:', error);
         this.hasBlog = false;
         this.blogUrl = '';
       }
-    },
-    toggleUserDropdown() {
-      if (this.isToggling) return;
-      this.isToggling = true;
-      console.log('Toggle triggered, current state:', this.showUserDropdown);
-      this.showUserDropdown = !this.showUserDropdown;
-      console.log('Dropdown toggled:', this.showUserDropdown);
-      this.$nextTick(() => {
-        console.log('DOM updated, showUserDropdown:', this.showUserDropdown);
-        const dropdown = document.querySelector('.dropdown-menu');
-        console.log('Dropdown element exists:', !!dropdown);
-        this.isToggling = false;
-      });
-    },
-    closeDropdown(event) {
-      if (!this.showUserDropdown || this.isToggling) return;
-      if (!event.target.closest('.user-menu')) {
-        console.log('Closing dropdown, target:', event.target);
-        this.showUserDropdown = false;
-        console.log('Dropdown closed');
-      }
-    },
-    logNavigation() {
-      console.log('Navigating to /blog/create');
-      this.showUserDropdown = false;
     },
     async handleLogout() {
       try {
@@ -166,6 +174,7 @@ export default {
         alert('로그아웃에 실패했습니다. 다시 시도해주세요.');
       } finally {
         this.isLoggingOut = false;
+        this.showUserDropdown = false;
       }
     },
     handleSearch() {
@@ -181,11 +190,10 @@ export default {
 </script>
 
 <style scoped>
-/* 기존 스타일 유지 */
 .navbar {
   background-color: white;
   border-bottom: 1px solid #e5e5e5;
-  padding: 12px 0;
+  padding: 1rem 0;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -197,34 +205,35 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 1.5rem;
 }
 
 .navbar-brand .logo {
-  font-size: 22px;
-  font-weight: bold;
-  color: #03C75A;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #000;
   text-decoration: none;
 }
 
 .search-bar {
   flex: 1;
-  max-width: 460px;
+  max-width: 400px;
   position: relative;
-  margin: 0 20px;
+  margin: 0 2rem;
 }
 
 .search-bar input {
   width: 100%;
-  padding: 10px 40px 10px 15px;
+  padding: 0.5rem 1rem;
   border: 1px solid #ddd;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 0.9rem;
+  background-color: #f8f9fa;
 }
 
 .search-button {
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   border: none;
@@ -243,77 +252,89 @@ export default {
   align-items: center;
   cursor: pointer;
   position: relative;
-  margin-right: 15px;
+  margin-right: 1rem;
+  z-index: 2001; /* 추가 */
 }
 
 .user-name {
-  font-size: 14px;
+  font-size: 0.9rem;
   font-weight: 500;
-  margin-right: 5px;
+  margin-right: 0.5rem;
 }
 
 .dropdown-menu {
   position: absolute;
-  top: 40px;
+  top: 100%;
   right: 0;
   background-color: white;
   border: 1px solid #e5e5e5;
   border-radius: 4px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   width: 160px;
-  min-height: 100px;
+  padding: 0.5rem 0;
   z-index: 2000;
-  padding: 5px 0;
-  display: block;
+  display: block; /* 추가 */
 }
 
 .dropdown-item {
   display: block;
-  padding: 10px 15px;
+  padding: 0.5rem 1rem;
   color: #333;
   text-decoration: none;
-  font-size: 14px;
+  font-size: 0.9rem;
   background: none;
   border: none;
   width: 100%;
   text-align: left;
+  transition: background-color 0.2s;
 }
 
 .dropdown-item:hover {
-  background-color: #f5f5f5;
+  background-color: #f8f9fa;
 }
 
 .dropdown-divider {
   height: 1px;
   background-color: #e5e5e5;
-  margin: 5px 0;
+  margin: 0.5rem 0;
 }
 
 .write-button {
-  background-color: #03C75A;
+  background-color: #000;
   color: white;
   border: none;
   border-radius: 4px;
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
   font-weight: 500;
   text-decoration: none;
   display: flex;
   align-items: center;
+  transition: background-color 0.2s;
+}
+
+.write-button:hover {
+  background-color: #333;
 }
 
 .write-button i {
-  margin-right: 5px;
+  margin-right: 0.5rem;
 }
 
 .login-button {
-  color: #03C75A;
+  color: #000;
   font-weight: 500;
   text-decoration: none;
-  font-size: 14px;
-  padding: 8px 16px;
-  border: 1px solid #03C75A;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #000;
   border-radius: 4px;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.login-button:hover {
+  background-color: #000;
+  color: white;
 }
 
 @media (max-width: 768px) {
@@ -322,13 +343,13 @@ export default {
   }
 
   .navbar-brand {
-    margin-bottom: 10px;
+    margin-bottom: 0.5rem;
   }
 
   .search-bar {
     order: 3;
     max-width: 100%;
-    margin: 10px 0 0;
+    margin: 0.5rem 0 0;
   }
 }
 </style>

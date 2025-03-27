@@ -1,32 +1,49 @@
 <template>
   <div class="home">
     <NavBar />
-    <div class="container mt-4">
-      <div class="row">
-        <div class="col-md-8">
-          <h1>환영합니다!</h1>
-          <p>블로그 플랫폼에 오신 것을 환영합니다.</p>
-          <div class="popular-posts">
-            <h3>인기글</h3>
-            <p>추후 구현 예정...</p>
-          </div>
+    <div class="container">
+      <div class="home-content">
+        <div class="hero-section">
+          <h1 class="site-title">Glowrise</h1>
+          <p class="site-description">Create, Share, Inspire</p>
         </div>
-        <div class="col-md-4">
+
+        <div class="main-grid">
+          <div class="blog-overview">
+            <h2>Welcome to Glowrise</h2>
+            <p>Your journey of sharing stories begins here.</p>
+
+            <div class="popular-posts">
+              <h3>Featured Posts</h3>
+              <div class="placeholder-posts">
+                <p>Trending content coming soon...</p>
+              </div>
+            </div>
+          </div>
+
           <div class="blog-sidebar">
-            <h3>내 블로그</h3>
-            <div v-if="isLoading">로딩 중...</div>
-            <div v-else-if="!isLoggedIn">
-              <p>블로그를 생성하려면 로그인이 필요합니다.</p>
-              <router-link to="/login" class="btn btn-primary">로그인</router-link>
+            <div v-if="isLoading" class="loading-state">
+              <span>Loading...</span>
             </div>
-            <div v-else-if="!blog">
-              <p>아직 블로그가 없습니다.</p>
-              <router-link to="/blog/create" class="btn btn-primary">블로그 생성하기</router-link>
+
+            <div v-else-if="!isLoggedIn" class="login-prompt">
+              <h3>Start Your Blog</h3>
+              <p>Sign in to create your personal space</p>
+              <router-link to="/login" class="btn-primary">Sign In</router-link>
             </div>
-            <div v-else>
-              <p>{{ blog.title }}</p>
-              <router-link :to="`/${blog.url}`" class="btn btn-success">내 블로그 가기</router-link>
-              <router-link :to="`/blog/edit/${blog.id}`" class="btn btn-secondary ms-2">블로그 수정</router-link>
+
+            <div v-else-if="!blog" class="create-blog-prompt">
+              <h3>Your Blog</h3>
+              <p>You haven't created a blog yet</p>
+              <router-link to="/blog/create" class="btn-secondary">Create Blog</router-link>
+            </div>
+
+            <div v-else class="blog-info">
+              <h3>{{ blog.title }}</h3>
+              <div class="blog-actions">
+                <router-link :to="`/${blog.url}`" class="btn-primary">View Blog</router-link>
+                <router-link :to="`/blog/edit/${blog.id}`" class="btn-secondary">Edit</router-link>
+              </div>
             </div>
           </div>
         </div>
@@ -61,13 +78,12 @@ export default {
         if (storedUser) {
           const userData = await authService.getCurrentUser();
           const blogData = await authService.getBlogByUserId(userData.id);
-          this.blog = blogData; // null이면 블로그 없음
-          console.log('Loaded blog in Home:', this.blog);
+          this.blog = blogData;
         } else {
           this.blog = null;
         }
       } catch (error) {
-        console.error('블로그 로드 실패:', error);
+        console.error('Blog load failed:', error);
         this.blog = null;
         this.isLoggedIn = false;
         if (error.response?.status === 401) {
@@ -82,15 +98,98 @@ export default {
 </script>
 
 <style scoped>
-.blog-sidebar {
-  background-color: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+.home {
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  color: #333;
 }
 
-.btn {
-  padding: 8px 16px;
-  font-size: 14px;
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.home-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.hero-section {
+  text-align: center;
+  padding: 3rem 0;
+}
+
+.site-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #000;
+  margin-bottom: 0.5rem;
+}
+
+.site-description {
+  font-size: 1.2rem;
+  color: #666;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+}
+
+.blog-overview, .blog-sidebar {
+  background-color: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.blog-sidebar h3 {
+  border-bottom: 2px solid #000;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.btn-primary, .btn-secondary {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.btn-primary {
+  background-color: #000;
+  color: white;
+}
+
+.btn-secondary {
+  background-color: #f8f9fa;
+  color: #000;
+  border: 1px solid #000;
+  margin-left: 0.5rem;
+}
+
+.blog-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.placeholder-posts {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

@@ -127,7 +127,7 @@ public class CommentService {
         dto.setPostId(comment.getPost() != null ? comment.getPost().getId() : null);
         dto.setUserId(comment.getUser() != null ? comment.getUser().getId() : null);
         dto.setParentId(comment.getParent() != null ? comment.getParent().getId() : null); // parentId 설정
-
+        dto.setUpdatedAt(comment.getLastModifiedDate());
         Long userId = dto.getUserId();
         if (userId != null) {
             User author = userRepository.findById(userId)

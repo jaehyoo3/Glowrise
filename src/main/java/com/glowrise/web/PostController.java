@@ -3,7 +3,13 @@ package com.glowrise.web;
 import com.glowrise.service.PostService;
 import com.glowrise.service.UserService;
 import com.glowrise.service.dto.PostDTO;
+import com.glowrise.service.dto.PostListDTO;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -64,12 +70,6 @@ public class PostController {
         return ResponseEntity.ok(posts);
     }
 
-    @GetMapping("/menu/{menuId}")
-    public ResponseEntity<List<PostDTO>> getPostsByMenuId(@PathVariable Long menuId) {
-        List<PostDTO> posts = postService.getPostsByMenuId(menuId);
-        return ResponseEntity.ok(posts);
-    }
-
     @GetMapping("/user/{userId}")
     public ResponseEntity<List<PostDTO>> getPostsByUserId(@PathVariable Long userId) {
         List<PostDTO> posts = postService.getPostsByUserId(userId);
@@ -77,20 +77,38 @@ public class PostController {
     }
 
     @GetMapping("/{postId}")
-    public ResponseEntity<PostDTO> getPostById(@PathVariable Long postId) {
-        System.out.println("Received GET /api/posts/" + postId);
-        PostDTO post = postService.getPostById(postId);
-        if (post == null) {
-            System.out.println("Post not found for ID: " + postId);
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<PostDTO> getPostById(
+            @PathVariable Long postId,
+            HttpServletRequest request,
+            Authentication authentication) {
+        String clientIp = request.getRemoteAddr(); // 기본 IP 추출
+        // 프록시 환경에서는 X-Forwarded-For 헤더를 고려해야 할 수 있음
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isEmpty()) {
+            clientIp = forwardedFor.split(",")[0].trim(); // 첫 번째 IP 사용
         }
-        System.out.println("Returning post: " + post);
+
+        PostDTO post = postService.getPostById(postId, clientIp, authentication);
         return ResponseEntity.ok(post);
     }
 
+    @GetMapping("/blog/{blogId}/{menuId}")
+    public ResponseEntity<Page<PostDTO>> getPostsByBlogIdAndMenuId(
+            @PathVariable Long blogId,
+            @PathVariable Long menuId,
+            @RequestParam(required = false) String searchKeyword,
+            @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<PostDTO> posts = postService.getPosts(blogId, menuId, searchKeyword, pageable);
+        return ResponseEntity.ok(posts);
+    }
+
+    // menuId가 없는 경우: 전체 게시글 조회
     @GetMapping("/blog/{blogId}")
-    public ResponseEntity<List<PostDTO>> getAllPostsByBlogId(@PathVariable Long blogId) {
-        List<PostDTO> posts = postService.getAllPostsByBlogId(blogId);
+    public ResponseEntity<Page<PostDTO>> getPostsByBlogId(
+            @PathVariable Long blogId,
+            @RequestParam(required = false) String searchKeyword,
+            @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        Page<PostDTO> posts = postService.getPosts(blogId, null, searchKeyword, pageable);
         return ResponseEntity.ok(posts);
     }
 

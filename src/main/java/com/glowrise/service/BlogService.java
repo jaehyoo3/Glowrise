@@ -118,7 +118,9 @@ public class BlogService {
 
     public BlogDTO getBlogByUrl(String url) {
         Blog blog = blogRepository.findByUrl(url).orElse(null);
-        return blog != null ? blogMapper.toDto(blog) : null;
+        BlogDTO blogDTO = blogMapper.toDto(blog);
+        blogDTO.setUserId(blog.getUser().getId());
+        return blogDTO;
     }
 
     private Long getUserIdFromAuthentication(Authentication authentication) {

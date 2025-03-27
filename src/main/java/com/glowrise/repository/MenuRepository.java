@@ -16,6 +16,9 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
 
     @Query("SELECT COALESCE(MAX(m.orderIndex), -1) FROM Menu m WHERE m.blog.id = :blogId")
     Optional<Integer> findMaxOrderIndexByBlogId(@Param("blogId") Long blogId);
+
+    @Query("SELECT m.id FROM Menu m WHERE m.id = :parentId OR m.parent.id = :parentId")
+    List<Long> findAllMenuIdsByParent(@Param("parentId") Long parentId);
 }
 
 

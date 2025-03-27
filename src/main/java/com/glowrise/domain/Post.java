@@ -37,4 +37,6 @@ public class Post extends AbstractAuditingEntity<Long> {
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Files> files = new ArrayList<>(); // 게시글에 첨부된 파일들
 
+    private Long viewCount;
+
 }

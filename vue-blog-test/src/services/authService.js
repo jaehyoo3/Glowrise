@@ -405,20 +405,24 @@ const authService = {
             throw error;
         }
     },
-
-    // 블로그 ID로 모든 게시글 조회
-    getAllPostsByBlogId: async (blogId) => {
+    getPostsByBlogIdAndMenuId: async (blogId, menuId, params = {}) => {
         const token = localStorage.getItem('accessToken');
-        console.log('getAllPostsByBlogId 토큰:', token);
         if (!token) throw new Error('토큰 없음');
+        const url = menuId ? `${API_URL}/api/posts/blog/${blogId}/${menuId}` : `${API_URL}/api/posts/blog/${blogId}`;
         try {
-            const response = await axios.get(`${API_URL}/api/posts/blog/${blogId}`, {
+            const response = await axios.get(url, {
                 headers: {Authorization: `Bearer ${token}`},
+                params: {
+                    searchKeyword: params.searchKeyword,
+                    page: params.page || 0,
+                    size: params.size || 20,
+                    sort: params.sort || 'updatedAt,desc',
+                },
             });
-            console.log('블로그 ID로 모든 게시글 응답:', response.data);
+            console.log('게시글 조회 응답:', response.data);
             return response.data;
         } catch (error) {
-            console.error('블로그 ID로 모든 게시글 조회 실패:', error.response?.data || error.message);
+            console.error('게시글 조회 실패:', error.response?.data || error.message);
             throw error;
         }
     },

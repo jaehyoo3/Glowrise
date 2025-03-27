@@ -1,39 +1,90 @@
 <template>
-  <div class="post-create container mt-4">
+  <div class="post-create">
     <NavBar/>
-    <h1>새 게시글 작성</h1>
-    <div v-if="isLoading">로딩 중...</div>
-    <div v-else>
-      <form @submit.prevent="createPost">
-        <div class="form-group">
-          <label for="menuSelect">메뉴 선택 (필수)</label>
-          <select v-model="newPost.menuId" class="form-control" id="menuSelect" required>
-            <option value="" disabled>메뉴를 선택하세요</option>
-            <option
-                v-for="menu in allMenus"
-                :key="menu.id"
-                :value="menu.id"
-                :disabled="isParentMenu(menu.id)"
-            >
-              {{ menu.name }} {{ menu.parentId ? `(하위: ${getParentName(menu.parentId)})` : '' }}
-            </option>
-          </select>
+    <div class="container">
+      <div class="post-create-content">
+        <div class="post-create-header">
+          <h1>새 게시글 작성</h1>
         </div>
-        <div class="form-group">
-          <label for="postTitle">제목</label>
-          <input v-model="newPost.title" class="form-control" id="postTitle" required/>
+
+        <div v-if="isLoading" class="loading-state">
+          <span>로딩 중...</span>
         </div>
-        <div class="form-group">
-          <label for="postContent">내용</label>
-          <textarea v-model="newPost.content" class="form-control" id="postContent" required></textarea>
+
+        <div v-else class="post-form-container">
+          <form @submit.prevent="createPost" class="post-form">
+            <div class="form-group">
+              <label for="menuSelect" class="form-label">메뉴 선택 (필수)</label>
+              <select
+                  v-model="newPost.menuId"
+                  class="form-control"
+                  id="menuSelect"
+                  required
+              >
+                <option value="" disabled>메뉴를 선택하세요</option>
+                <option
+                    v-for="menu in allMenus"
+                    :key="menu.id"
+                    :value="menu.id"
+                    :disabled="isParentMenu(menu.id)"
+                >
+                  {{ menu.name }} {{ menu.parentId ? `(하위: ${getParentName(menu.parentId)})` : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="postTitle" class="form-label">제목</label>
+              <input
+                  v-model="newPost.title"
+                  class="form-control"
+                  id="postTitle"
+                  required
+                  placeholder="게시글 제목을 입력하세요"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="postContent" class="form-label">내용</label>
+              <textarea
+                  v-model="newPost.content"
+                  class="form-control"
+                  id="postContent"
+                  required
+                  placeholder="게시글 내용을 작성하세요"
+                  rows="10"
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="postFiles" class="form-label">첨부 파일</label>
+              <input
+                  type="file"
+                  multiple
+                  class="form-control"
+                  id="postFiles"
+                  @change="handleFileChange"
+              />
+            </div>
+
+            <div class="form-actions">
+              <button
+                  type="submit"
+                  class="btn btn-primary"
+                  :disabled="isPosting"
+              >
+                {{ isPosting ? '작성 중...' : '작성하기' }}
+              </button>
+              <router-link
+                  :to="`/blog/${blogUrl}`"
+                  class="btn btn-secondary"
+              >
+                취소
+              </router-link>
+            </div>
+          </form>
         </div>
-        <div class="form-group">
-          <label for="postFiles">첨부 파일</label>
-          <input type="file" multiple class="form-control" id="postFiles" @change="handleFileChange"/>
-        </div>
-        <button type="submit" class="btn btn-primary mt-2" :disabled="isPosting">작성하기</button>
-        <router-link :to="`/blog/${blogUrl}`" class="btn btn-secondary mt-2 ml-2">취소</router-link>
-      </form>
+      </div>
     </div>
   </div>
 </template>
@@ -157,31 +208,133 @@ export default {
   },
 };
 </script>
-
 <style scoped>
 .post-create {
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  color: #333;
+}
+
+.container {
   max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.post-create-content {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+.post-create-header {
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.post-create-header h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #000;
+  border-bottom: 2px solid #000;
+  padding-bottom: 0.5rem;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.2rem;
+}
+
+.post-form-container {
+  max-width: 600px;
   margin: 0 auto;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 1.5rem;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
 .form-control {
   width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  background-color: #f8f9fa;
+  transition: border-color 0.3s ease;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #000;
+}
+
+.form-control::placeholder {
+  color: #888;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
 }
 
 .btn {
-  margin-right: 10px;
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 4px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  text-align: center;
+  font-size: 1rem;
 }
 
-.ml-2 {
-  margin-left: 10px;
+.btn-primary {
+  background-color: #000;
+  color: white;
 }
 
-#menuSelect option:disabled {
-  color: #888;
-  font-style: italic;
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #f8f9fa;
+  color: #000;
+  border: 1px solid #000;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .post-create-content {
+    padding: 1.5rem;
+  }
+
+  .post-create-header h1 {
+    font-size: 2rem;
+  }
+
+  .form-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .btn {
+    width: 100%;
+  }
 }
 </style>
