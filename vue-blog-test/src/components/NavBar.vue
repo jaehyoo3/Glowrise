@@ -40,11 +40,11 @@
                   내 블로그
                 </router-link>
                 <router-link
-                    to="/profile"
+                    to="/profile/edit"
                     class="dropdown-item"
                     @click="closeDropdown"
                 >
-                  프로필
+                  내 정보 수정
                 </router-link>
               </template>
               <template v-else>
@@ -75,6 +75,7 @@
     </div>
   </div>
 </template>
+
 <script>
 import authService from '@/services/authService';
 
@@ -253,7 +254,7 @@ export default {
   cursor: pointer;
   position: relative;
   margin-right: 1rem;
-  z-index: 2001; /* 추가 */
+  z-index: 2001;
 }
 
 .user-name {
@@ -273,7 +274,7 @@ export default {
   width: 160px;
   padding: 0.5rem 0;
   z-index: 2000;
-  display: block; /* 추가 */
+  display: block;
 }
 
 .dropdown-item {

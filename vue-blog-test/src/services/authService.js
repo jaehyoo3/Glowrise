@@ -103,6 +103,23 @@ const authService = {
         }
     },
 
+    // 사용자 정보 수정
+    updateUserProfile: async (username, userData) => {
+        const token = localStorage.getItem('accessToken');
+        console.log('updateUserProfile 토큰:', token);
+        if (!token) throw new Error('토큰 없음');
+        try {
+            const response = await axios.put(`${API_URL}/api/users/profile/${username}`, userData, {
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            console.log('사용자 정보 수정 응답:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('사용자 정보 수정 실패:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+
     // 토큰 갱신
     refreshToken: async () => {
         const refreshToken = localStorage.getItem('refreshToken');
@@ -405,6 +422,7 @@ const authService = {
             throw error;
         }
     },
+
     getPostsByBlogIdAndMenuId: async (blogId, menuId, params = {}) => {
         const token = localStorage.getItem('accessToken');
         if (!token) throw new Error('토큰 없음');

@@ -7,6 +7,7 @@ import BlogView from '@/views/BlogView.vue';
 import PostCreate from '@/views/PostCreate.vue';
 import PostDetail from '@/views/PostDetail.vue';
 import PostEdit from '@/views/PostEdit.vue';
+import UserProfileEdit from '@/views/UserProfileEdit.vue'; // 새 컴포넌트 추가
 import authService from '@/services/authService';
 
 const routes = [
@@ -27,7 +28,6 @@ const routes = [
     },
     {path: '/:blogUrl/:menuId', name: 'BlogMenu', component: BlogView, props: true},
     {path: '/:blogUrl', name: 'Blog', component: BlogView, props: true},
-    // 추가된 경로
     {
         path: '/:blogUrl/:menuId/edit/:postId',
         name: 'PostEditWithMenu',
@@ -35,6 +35,8 @@ const routes = [
         props: true,
         meta: {requiresAuth: true}
     },
+    // 사용자 정보 수정 경로 추가
+    {path: '/profile/edit', name: 'UserProfileEdit', component: UserProfileEdit, meta: {requiresAuth: true}},
     { path: '/:catchAll(.*)', redirect: '/' }
 ];
 
