@@ -34,7 +34,7 @@ public class JWTFilter extends OncePerRequestFilter {
         String requestUri = request.getRequestURI();
         System.out.println("Request URI: " + requestUri + ", Access Token: " + (accessToken != null ? "present" : "missing") + ", Refresh Token: " + (refreshToken != null ? "present" : "missing"));
 
-        if (requestUri.startsWith("/login") || requestUri.startsWith("/api/users/refresh") || requestUri.startsWith("/api/auth/") || requestUri.startsWith("/h2-console")) {
+        if (requestUri.startsWith("/login") || requestUri.startsWith("/api/users/refresh") || requestUri.startsWith("/api/auth/") || requestUri.startsWith("/h2-console") || requestUri.startsWith("/api/users/signup")) {
             System.out.println("Skipping JWT filter for: " + requestUri);
             filterChain.doFilter(request, response);
             return;

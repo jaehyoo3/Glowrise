@@ -493,6 +493,38 @@ const authService = {
             throw error;
         }
     },
+    async getNotifications() {
+        const token = localStorage.getItem('accessToken');
+        console.log('getNotifications 토큰:', token);
+        if (!token) throw new Error('토큰 없음');
+        try {
+            const response = await axios.get(`${API_URL}/api/notifications`, {
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            console.log('알림 목록 조회 응답:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('알림 목록 조회 실패:', error.response?.data || error.message);
+            throw error;
+        }
+    },
+
+    // 알림 읽음 처리
+    async markNotificationAsRead(notificationId) {
+        const token = localStorage.getItem('accessToken');
+        console.log('markNotificationAsRead 토큰:', token);
+        if (!token) throw new Error('토큰 없음');
+        try {
+            const response = await axios.put(`${API_URL}/api/notifications/${notificationId}/read`, {}, {
+                headers: {Authorization: `Bearer ${token}`},
+            });
+            console.log('알림 읽음 처리 응답:', response.data);
+            return response.data;
+        } catch (error) {
+            console.error('알림 읽음 처리 실패:', error.response?.data || error.message);
+            throw error;
+        }
+    },
 };
 
 // Axios 응답 인터셉터 설정

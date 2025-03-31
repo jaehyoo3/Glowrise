@@ -9,7 +9,10 @@ import com.glowrise.repository.CommentRepository;
 import com.glowrise.repository.PostRepository;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.CommentDTO;
+import com.glowrise.service.dto.NotificationDTO;
+import com.glowrise.service.dto.NotificationEvent;
 import com.glowrise.service.mapper.CommentMapper;
+import com.glowrise.service.util.NotificationProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -28,6 +31,7 @@ public class CommentService {
     private final CommentMapper commentMapper;
     private final PostRepository postRepository;
     private final UserRepository userRepository;
+    private final NotificationProducer notificationProducer; // Kafka 프로듀서 주입
 
     public CommentDTO createComment(CommentDTO dto, Authentication authentication) {
         Long userId = getUserIdFromAuthentication(authentication);
@@ -45,6 +49,21 @@ public class CommentService {
         Comment savedComment = commentRepository.save(comment);
         CommentDTO result = commentMapper.toDto(savedComment);
         result.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
+
+        // 게시글 주인에게 알림 발송 (작성자가 게시글 주인이 아닌 경우에만)
+        if (!post.getAuthor().getId().equals(userId)) {
+            NotificationEvent event = new NotificationEvent();
+            event.setEventType("NEW_COMMENT");
+            event.setUserId(post.getAuthor().getId()); // 게시글 주인
+            event.setMessage("새로운 댓글이 있습니다.");
+            event.setPostId(post.getId());
+            event.setCommentId(savedComment.getId());
+
+            notificationProducer.sendNotification(event);
+            log.info("새로운 댓글 알림 발송: userId={}, postId={}, commentId={}",
+                    post.getAuthor().getId(), post.getId(), savedComment.getId());
+        }
+
         return result;
     }
 
@@ -71,6 +90,22 @@ public class CommentService {
         Comment savedReply = commentRepository.save(reply);
         CommentDTO result = commentMapper.toDto(savedReply);
         result.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
+
+        // 부모 댓글 작성자에게 알림 발송 (답글 작성자가 부모 댓글 작성자가 아닌 경우에만)
+        if (!parent.getUser().getId().equals(userId)) {
+            NotificationEvent event = new NotificationEvent();
+            event.setEventType("NEW_REPLY");
+            event.setUserId(parent.getUser().getId()); // 부모 댓글 작성자
+            event.setMessage("새로운 답글이 있습니다.");
+            event.setPostId(post.getId());
+            event.setCommentId(savedReply.getId());
+            event.setParentId(parentId);
+
+            notificationProducer.sendNotification(event);
+            log.info("새로운 답글 알림 발송: userId={}, postId={}, commentId={}, parentId={}",
+                    parent.getUser().getId(), post.getId(), savedReply.getId(), parentId);
+        }
+
         return result;
     }
 

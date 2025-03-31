@@ -19,18 +19,36 @@
 
       <div class="navbar-menu">
         <template v-if="isLoggedIn">
-          <div
-              class="user-menu"
-              @click.stop="toggleUserDropdown"
-          >
+          <!-- 알림 아이콘 및 드롭다운 -->
+          <div class="notification-menu" @click.stop="toggleNotificationDropdown">
+            <i class="fas fa-bell"></i>
+            <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
+
+            <div v-if="showNotificationDropdown" class="dropdown-menu notification-dropdown" @click.stop>
+              <div v-if="notifications.length === 0" class="dropdown-item no-notifications">
+                알림이 없습니다.
+              </div>
+              <div v-else>
+                <div
+                    v-for="notification in notifications"
+                    :key="notification.id"
+                    class="dropdown-item notification-item"
+                    :class="{ 'unread': !notification.isRead }"
+                    @click="handleNotificationClick(notification)"
+                >
+                  <span>{{ notification.message }}</span>
+                  <small>{{ formatDate(notification.createdDate) }}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 사용자 메뉴 -->
+          <div class="user-menu" @click.stop="toggleUserDropdown">
             <span class="user-name">{{ userName }}</span>
             <i class="fas fa-chevron-down"></i>
 
-            <div
-                v-if="showUserDropdown"
-                class="dropdown-menu"
-                @click.stop
-            >
+            <div v-if="showUserDropdown" class="dropdown-menu" @click.stop>
               <template v-if="hasBlog">
                 <router-link
                     :to="`/${blogUrl}`"
@@ -75,9 +93,9 @@
     </div>
   </div>
 </template>
-
 <script>
 import authService from '@/services/authService';
+import {websocketService} from '@/services/websocketService';
 
 export default {
   name: 'NavBar',
@@ -85,6 +103,7 @@ export default {
     return {
       searchQuery: '',
       showUserDropdown: false,
+      showNotificationDropdown: false,
       isLoggedIn: false,
       userName: '',
       userProfileImage: '',
@@ -92,6 +111,8 @@ export default {
       hasBlog: false,
       userId: null,
       blogUrl: '',
+      notifications: [], // 알림 목록
+      unreadCount: 0, // 읽지 않은 알림 개수
     };
   },
   mounted() {
@@ -99,6 +120,7 @@ export default {
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleOutsideClick);
+    websocketService.disconnect();
   },
   created() {
     this.checkLoginStatus();
@@ -106,17 +128,32 @@ export default {
   methods: {
     handleOutsideClick(event) {
       const userMenu = this.$el.querySelector('.user-menu');
-      if (userMenu && !userMenu.contains(event.target)) {
-        console.log('Clicked outside, closing dropdown');
+      const notificationMenu = this.$el.querySelector('.notification-menu');
+      if (
+          (userMenu && !userMenu.contains(event.target)) &&
+          (notificationMenu && !notificationMenu.contains(event.target))
+      ) {
+        console.log('Clicked outside, closing dropdowns');
         this.showUserDropdown = false;
+        this.showNotificationDropdown = false;
       }
     },
     toggleUserDropdown() {
       console.log('Toggling user dropdown, current state:', this.showUserDropdown);
       this.showUserDropdown = !this.showUserDropdown;
+      this.showNotificationDropdown = false; // 다른 드롭다운 닫기
+    },
+    toggleNotificationDropdown() {
+      console.log('Toggling notification dropdown, current state:', this.showNotificationDropdown);
+      this.showNotificationDropdown = !this.showNotificationDropdown;
+      this.showUserDropdown = false; // 다른 드롭다운 닫기
+      if (this.showNotificationDropdown) {
+        this.fetchNotifications();
+      }
     },
     closeDropdown() {
       this.showUserDropdown = false;
+      this.showNotificationDropdown = false;
     },
     async checkLoginStatus() {
       const user = authService.getStoredUser();
@@ -126,6 +163,8 @@ export default {
         this.userId = user.id;
         this.userProfileImage = user.profileImage || '';
         await this.checkBlogStatus();
+        await this.fetchNotifications(); // 알림 목록 초기 로드
+        this.connectWebSocket(); // WebSocket 연결
       } else {
         this.isLoggedIn = false;
         this.userName = '';
@@ -133,6 +172,8 @@ export default {
         this.userProfileImage = '';
         this.hasBlog = false;
         this.blogUrl = '';
+        this.notifications = [];
+        this.unreadCount = 0;
         try {
           const serverUser = await authService.getCurrentUser();
           authService.setStoredUser({id: serverUser.userId || serverUser.id, username: serverUser.username});
@@ -158,6 +199,56 @@ export default {
         this.blogUrl = '';
       }
     },
+    async fetchNotifications() {
+      if (!this.isLoggedIn) return;
+      try {
+        console.log('Fetching notifications...');
+        const newNotifications = await authService.getNotifications();
+        // 중복 제거 및 병합
+        const existingIds = new Set(this.notifications.map(n => n.id));
+        this.notifications = [
+          ...this.notifications,
+          ...newNotifications.filter(n => !existingIds.has(n.id))
+        ];
+        this.notifications.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
+        this.unreadCount = this.notifications.filter(n => !n.isRead).length;
+      } catch (error) {
+        console.error('알림 목록 가져오기 실패:', error);
+        this.notifications = [];
+        this.unreadCount = 0;
+      }
+    },
+    connectWebSocket() {
+      if (!this.userId) return;
+      websocketService.connect(this.userId, (notification) => {
+        console.log('New notification received:', notification);
+        // 중복 알림 방지
+        if (!this.notifications.some(n => n.id === notification.id)) {
+          this.notifications.unshift(notification);
+          this.notifications.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
+          if (!notification.isRead) {
+            this.unreadCount += 1; // 읽지 않은 알림이면 카운트 증가
+          }
+        }
+      });
+    },
+    async handleNotificationClick(notification) {
+      try {
+        if (!notification.isRead) {
+          await authService.markNotificationAsRead(notification.id);
+          notification.isRead = true;
+          this.unreadCount = this.notifications.filter(n => !n.isRead).length;
+        }
+        this.$router.push(`/${notification.blogUrl}/${notification.menuId}/${notification.postId}`);
+        this.closeDropdown();
+      } catch (error) {
+        console.error('알림 읽음 처리 실패:', error);
+        alert('알림을 처리하는 데 실패했습니다.');
+      }
+    },
+    formatDate(date) {
+      return new Date(date).toLocaleString();
+    },
     async handleLogout() {
       try {
         this.isLoggingOut = true;
@@ -168,6 +259,9 @@ export default {
         this.userProfileImage = '';
         this.hasBlog = false;
         this.blogUrl = '';
+        this.notifications = [];
+        this.unreadCount = 0;
+        websocketService.disconnect(); // WebSocket 연결 해제
         this.$router.push('/login');
         alert('로그아웃되었습니다.');
       } catch (error) {
@@ -248,6 +342,65 @@ export default {
   align-items: center;
 }
 
+/* 알림 메뉴 스타일 */
+.notification-menu {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  margin-right: 1rem;
+  z-index: 2001;
+}
+
+.notification-menu i {
+  font-size: 1.2rem;
+  color: #333;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background-color: #ff4d4f;
+  color: white;
+  border-radius: 50%;
+  padding: 2px 6px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.notification-dropdown {
+  max-height: 300px;
+  overflow-y: auto;
+  width: 250px;
+}
+
+.notification-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e5e5e5;
+  cursor: pointer;
+}
+
+.notification-item.unread {
+  background-color: #f0f8ff;
+  font-weight: 500;
+}
+
+.notification-item small {
+  color: #666;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.no-notifications {
+  padding: 0.75rem 1rem;
+  color: #666;
+  text-align: center;
+}
+
+/* 사용자 메뉴 스타일 */
 .user-menu {
   display: flex;
   align-items: center;
