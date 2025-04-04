@@ -79,15 +79,18 @@
                       >
                     </div>
                     <div class="post-content">
-                      <router-link
-                          :to="{
-                            path: `/${blog.url}/${post.menuId}/${post.id}`,
-                            query: { fromAll: !$route.params.menuId ? 'true' : undefined }
-                          }"
-                          class="post-link"
-                      >
-                        {{ post.title }} [{{ post.commentCount || 0 }}]
-                      </router-link>
+                      <div class="post-title-container">
+                        <router-link
+                            :to="{
+                              path: `/${blog.url}/${post.menuId}/${post.id}`,
+                              query: { fromAll: !$route.params.menuId ? 'true' : undefined }
+                            }"
+                            class="post-link"
+                        >
+                          {{ post.title }} [{{ post.commentCount || 0 }}]
+                        </router-link>
+                        <i v-if="post.hasAttachments || post.fileCount > 0" class="fas fa-paperclip file-icon"></i>
+                      </div>
                       <span class="post-meta">
                         {{ formatDate(post.updatedAt) }} 조회수: {{ post.viewCount || 0 }}
                       </span>
@@ -485,9 +488,20 @@ export default {
   align-items: center;
 }
 
+.post-title-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .post-link {
   text-decoration: none;
   color: #000;
+}
+
+.file-icon {
+  color: #6c757d;
+  font-size: 0.8rem;
 }
 
 .post-meta {

@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router';
+import {createRouter, createWebHistory} from 'vue-router';
 import LoginView from '@/views/LoginView.vue';
 import HomeView from '@/views/HomeView.vue';
 import BlogCreateView from '@/views/BlogCreateView.vue';
@@ -26,7 +26,6 @@ const routes = [
         props: true,
         meta: {requiresAuth: true}
     },
-    {path: '/:blogUrl/:menuId', name: 'BlogMenu', component: BlogView, props: true},
     {path: '/:blogUrl', name: 'Blog', component: BlogView, props: true},
     {
         path: '/:blogUrl/:menuId/edit/:postId',

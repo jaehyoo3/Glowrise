@@ -126,35 +126,27 @@ export default {
         console.log('Fetching blog with URL:', blogUrl);
 
         this.blog = await authService.getBlogByUrl(blogUrl);
+        if (!this.blog || !this.blog.url) {
+          throw new Error('블로그를 찾을 수 없습니다.');
+        }
         console.log('Loaded blog:', JSON.stringify(this.blog));
 
-        if (this.blog) {
-          this.menus = await authService.getMenusByBlogId(this.blog.id);
-          console.log('Loaded menus:', JSON.stringify(this.menus));
-          this.allMenus = this.flattenMenus(this.menus);
-          console.log('Flattened allMenus:', JSON.stringify(this.allMenus));
+        this.menus = await authService.getMenusByBlogId(this.blog.id);
+        this.allMenus = this.flattenMenus(this.menus);
 
-          const user = await authService.getCurrentUser();
-          console.log('Current user:', JSON.stringify(user));
-          if (user && user.id) {
-            this.newPost.userId = user.id;
-            if (this.blog.userId && this.blog.userId !== user.id) {
-              throw new Error('이 블로그에 게시글을 작성할 권한이 없습니다.');
-            }
-          } else {
-            throw new Error('사용자 정보가 없습니다.');
-          }
+        const user = await authService.getCurrentUser();
+        if (!user || !user.id) {
+          throw new Error('사용자 정보가 없습니다.');
+        }
+        this.newPost.userId = user.id;
 
-          const queryMenuId = this.menuId || this.$route.query.menuId;
-          if (queryMenuId && this.allMenus.some(menu => menu.id === Number(queryMenuId))) {
-            this.newPost.menuId = Number(queryMenuId);
-            console.log('Pre-selected menuId from query:', this.newPost.menuId);
-          }
+        if (this.blog.userId && this.blog.userId !== user.id) {
+          throw new Error('이 블로그에 게시글을 작성할 권한이 없습니다.');
+        }
 
-          // 부모 메뉴 확인 로그
-          this.allMenus.forEach(menu => {
-            console.log(`Menu ${menu.id} (${menu.name}) is parent: ${this.isParentMenu(menu.id)}`);
-          });
+        const queryMenuId = this.$route.query.menuId;
+        if (queryMenuId && this.allMenus.some(menu => menu.id === Number(queryMenuId))) {
+          this.newPost.menuId = Number(queryMenuId);
         }
       } catch (error) {
         console.error('블로그 또는 메뉴 로드 실패:', error);
@@ -197,14 +189,19 @@ export default {
         const postData = {...this.newPost};
         const createdPost = await authService.createPost(postData, this.postFiles);
         console.log('Created post:', JSON.stringify(createdPost));
-        this.$router.push(`/blog/${this.blog.url}/${this.newPost.menuId}`);
+
+        // 블로그 URL과 menuId로 정확히 리다이렉트
+        const redirectUrl = `/${this.blog.url}`;
+        console.log('Redirecting to:', redirectUrl);
+        console.log('Rasdasd', this.blog.url);
+        this.$router.push(redirectUrl);
       } catch (error) {
         console.error('게시글 작성 실패:', error);
         alert('게시글 작성 실패: ' + (error.response?.data?.message || error.message));
       } finally {
         this.isPosting = false;
       }
-    },
+    }
   },
 };
 </script>

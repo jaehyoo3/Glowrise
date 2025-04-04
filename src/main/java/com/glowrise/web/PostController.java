@@ -1,9 +1,7 @@
 package com.glowrise.web;
 
 import com.glowrise.service.PostService;
-import com.glowrise.service.UserService;
 import com.glowrise.service.dto.PostDTO;
-import com.glowrise.service.dto.PostListDTO;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -14,7 +12,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -34,11 +31,18 @@ public class PostController {
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
             Authentication authentication) throws IOException {
         checkAuthentication(authentication);
-        System.out.println("Received POST /api/posts, DTO: " + dto);
+        System.out.println("Received DTO: " + dto);
+        System.out.println("Received files count: " + (files != null ? files.size() : 0));
+        if (files != null) {
+            files.forEach(file -> System.out.println("File name: " + file.getOriginalFilename() + ", Size: " + file.getSize()));
+        } else {
+            System.out.println("No files received");
+        }
         try {
             PostDTO createdPost = postService.createPost(dto, files, authentication);
             return ResponseEntity.ok(createdPost);
         } catch (IllegalArgumentException e) {
+            System.out.println("Error: " + e.getMessage());
             return ResponseEntity.badRequest().body(null);
         }
     }

@@ -1,20 +1,15 @@
 package com.glowrise.service;
 
 import com.glowrise.domain.*;
-import com.glowrise.repository.FileRepository;
 import com.glowrise.repository.MenuRepository;
 import com.glowrise.repository.PostRepository;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.FileDTO;
 import com.glowrise.service.dto.PostDTO;
-import com.glowrise.service.dto.PostListDTO;
 import com.glowrise.service.mapper.PostMapper;
 import com.glowrise.service.util.QueryDslPagingUtil;
 import com.querydsl.core.types.Projections;
-import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.Expressions;
-import com.querydsl.core.types.dsl.NumberExpression;
-import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.JPQLQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -24,16 +19,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
@@ -62,16 +54,50 @@ public class PostService {
         User author = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
 
-        Post post = postMapper.toEntity(dto);
+        // PostDTO -> Post (수동 매핑)
+        Post post = new Post();
+        post.setTitle(dto.getTitle());
+        post.setContent(dto.getContent());
+        post.setViewCount(0L);
         post.setMenu(menu);
         post.setAuthor(author);
 
         Post savedPost = postRepository.save(post);
 
-        List<FileDTO> uploadedFiles = fileService.uploadFiles(files, savedPost.getId());
-        dto.setFileIds(uploadedFiles.stream().map(FileDTO::getId).collect(Collectors.toList()));
+        // 파일 업로드
+        List<FileDTO> uploadedFiles = new ArrayList<>();
+        if (files != null && !files.isEmpty()) {
+            uploadedFiles = fileService.uploadFiles(files, savedPost.getId());
+            // Post 엔티티에 파일 연결
+            List<Files> fileEntities = uploadedFiles.stream()
+                    .map(fileDTO -> {
+                        Files file = new Files();
+                        file.setId(fileDTO.getId());
+                        file.setFileName(fileDTO.getFileName());
+                        file.setFilePath(fileDTO.getFilePath());
+                        file.setContentType(fileDTO.getContentType());
+                        file.setFileSize(fileDTO.getFileSize());
+                        file.setPost(savedPost);
+                        return file;
+                    })
+                    .collect(Collectors.toList());
+            savedPost.setFiles(fileEntities);
+        }
 
-        return postMapper.toDto(savedPost);
+        // Post -> PostDTO (수동 매핑)
+        PostDTO result = new PostDTO();
+        result.setId(savedPost.getId());
+        result.setTitle(savedPost.getTitle());
+        result.setContent(savedPost.getContent());
+        result.setMenuId(savedPost.getMenu() != null ? savedPost.getMenu().getId() : null);
+        result.setUserId(savedPost.getAuthor() != null ? savedPost.getAuthor().getId() : null);
+        result.setCommentCount(0L);
+        result.setViewCount(savedPost.getViewCount());
+        result.setFileIds(uploadedFiles.stream().map(FileDTO::getId).collect(Collectors.toList()));
+        result.setCreatedAt(savedPost.getCreatedDate());
+        result.setUpdatedAt(savedPost.getLastModifiedDate());
+
+        return result;
     }
 
     public PostDTO updatePost(Long postId, PostDTO dto, List<MultipartFile> files, Authentication authentication) throws IOException {
@@ -92,16 +118,50 @@ public class PostService {
             post.setMenu(menu);
         }
 
-        if (files != null && !files.isEmpty()) {
-            fileService.deleteFilesByPostId(postId);
-            List<FileDTO> uploadedFiles = fileService.uploadFiles(files, postId);
-            dto.setFileIds(uploadedFiles.stream().map(FileDTO::getId).collect(Collectors.toList()));
+        // Post 업데이트 (수동 매핑)
+        if (dto.getTitle() != null) {
+            post.setTitle(dto.getTitle());
+        }
+        if (dto.getContent() != null) {
+            post.setContent(dto.getContent());
         }
 
-        postMapper.partialUpdate(post, dto);
+        // 파일 처리
+        List<FileDTO> uploadedFiles = new ArrayList<>();
+        if (files != null && !files.isEmpty()) {
+            fileService.deleteFilesByPostId(postId);
+            post.getFiles().clear(); // 기존 파일 목록 비우기
+            uploadedFiles = fileService.uploadFiles(files, postId);
+            List<Files> fileEntities = uploadedFiles.stream()
+                    .map(fileDTO -> {
+                        Files file = new Files();
+                        file.setId(fileDTO.getId());
+                        file.setFileName(fileDTO.getFileName());
+                        file.setFilePath(fileDTO.getFilePath());
+                        file.setContentType(fileDTO.getContentType());
+                        file.setFileSize(fileDTO.getFileSize());
+                        file.setPost(post);
+                        return file;
+                    })
+                    .collect(Collectors.toList());
+            post.setFiles(fileEntities);
+        }
+
         Post updatedPost = postRepository.save(post);
-        PostDTO result = postMapper.toDto(updatedPost);
-        result.setMenuId(updatedPost.getMenu().getId());
+
+        // Post -> PostDTO (수동 매핑)
+        PostDTO result = new PostDTO();
+        result.setId(updatedPost.getId());
+        result.setTitle(updatedPost.getTitle());
+        result.setContent(updatedPost.getContent());
+        result.setMenuId(updatedPost.getMenu() != null ? updatedPost.getMenu().getId() : null);
+        result.setUserId(updatedPost.getAuthor() != null ? updatedPost.getAuthor().getId() : null);
+        result.setCommentCount(0L);
+        result.setViewCount(updatedPost.getViewCount());
+        result.setFileIds(uploadedFiles.stream().map(FileDTO::getId).collect(Collectors.toList()));
+        result.setCreatedAt(updatedPost.getCreatedDate());
+        result.setUpdatedAt(updatedPost.getLastModifiedDate());
+
         return result;
     }
 
@@ -134,8 +194,29 @@ public class PostService {
 
         // 조회수 증가 로직
         incrementViewCount(post, clientIp, authentication);
+        postRepository.save(post);
 
-        return postMapper.toDto(post);
+        // Post -> PostDTO (수동 매핑)
+        PostDTO postDTO = new PostDTO();
+        postDTO.setId(post.getId());
+        postDTO.setTitle(post.getTitle());
+        postDTO.setContent(post.getContent());
+        postDTO.setMenuId(post.getMenu() != null ? post.getMenu().getId() : null);
+        postDTO.setUserId(post.getAuthor() != null ? post.getAuthor().getId() : null);
+        postDTO.setCommentCount(0L); // 실제 댓글 수 로직 필요 시 추가
+        postDTO.setViewCount(post.getViewCount());
+        List<Files> files = post.getFiles();
+        if (files != null) {
+            postDTO.setFileIds(files.stream()
+                    .map(Files::getId)
+                    .collect(Collectors.toList()));
+        } else {
+            postDTO.setFileIds(new ArrayList<>());
+        }
+        postDTO.setCreatedAt(post.getCreatedDate());
+        postDTO.setUpdatedAt(post.getLastModifiedDate());
+
+        return postDTO;
     }
 
     private void incrementViewCount(Post post, String clientIp, Authentication authentication) {
@@ -184,7 +265,8 @@ public class PostService {
                         post.viewCount,
                         Expressions.constant(new ArrayList<Long>()), // fileIds 후처리
                         post.createdDate,
-                        post.lastModifiedDate
+                        post.lastModifiedDate,
+                        post.files.size()
                 ))
                 .from(post)
                 .join(post.menu, menu)
@@ -217,6 +299,10 @@ public class PostService {
         });
 
         return new PageImpl<>(dtos, pageable, postsPage.getTotalElements());
+    }
+
+    private List<Post> mostViewPostList() {
+        return postRepository.findTop10ByOrderByViewCountDesc();
     }
 
     private Long getUserIdFromAuthentication(Authentication authentication) {

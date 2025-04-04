@@ -2,7 +2,6 @@ package com.glowrise.service.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
@@ -23,9 +22,10 @@ public class PostDTO {
     private List<Long> fileIds = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Integer fileCount;
 
     public PostDTO(Long id, String title, String content, Long menuId, Long userId,
-                   Long viewCount, List<Long> fileIds, LocalDateTime createdAt, LocalDateTime updatedAt) {
+                   Long viewCount, List<Long> fileIds, LocalDateTime createdAt, LocalDateTime updatedAt, Integer fileCount) {
         this.id = id;
         this.title = title;
         this.content = content;
@@ -35,5 +35,6 @@ public class PostDTO {
         this.fileIds = fileIds;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.fileCount = fileCount;
     }
 }

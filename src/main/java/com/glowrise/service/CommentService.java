@@ -1,7 +1,5 @@
 package com.glowrise.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.glowrise.domain.Comment;
 import com.glowrise.domain.Post;
 import com.glowrise.domain.User;
@@ -9,7 +7,6 @@ import com.glowrise.repository.CommentRepository;
 import com.glowrise.repository.PostRepository;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.CommentDTO;
-import com.glowrise.service.dto.NotificationDTO;
 import com.glowrise.service.dto.NotificationEvent;
 import com.glowrise.service.mapper.CommentMapper;
 import com.glowrise.service.util.NotificationProducer;
@@ -18,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -48,6 +44,7 @@ public class CommentService {
 
         Comment savedComment = commentRepository.save(comment);
         CommentDTO result = commentMapper.toDto(savedComment);
+        result.setUpdatedAt(comment.getLastModifiedDate());
         result.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
 
         // 게시글 주인에게 알림 발송 (작성자가 게시글 주인이 아닌 경우에만)
@@ -89,6 +86,7 @@ public class CommentService {
 
         Comment savedReply = commentRepository.save(reply);
         CommentDTO result = commentMapper.toDto(savedReply);
+        result.setUpdatedAt(reply.getLastModifiedDate());
         result.setAuthorName(author.getNickName() != null ? author.getNickName() : author.getUsername());
 
         // 부모 댓글 작성자에게 알림 발송 (답글 작성자가 부모 댓글 작성자가 아닌 경우에만)

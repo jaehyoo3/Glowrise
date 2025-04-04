@@ -133,7 +133,6 @@ export default {
           (userMenu && !userMenu.contains(event.target)) &&
           (notificationMenu && !notificationMenu.contains(event.target))
       ) {
-        console.log('Clicked outside, closing dropdowns');
         this.showUserDropdown = false;
         this.showNotificationDropdown = false;
       }

@@ -19,12 +19,30 @@
         </div>
 
         <div class="post-content">
+          <!-- 이미지를 먼저 표시 -->
+          <div v-if="imageFiles.length > 0" class="post-images">
+            <div v-for="file in imageFiles" :key="file.id" class="content-image">
+              <img :alt="file.fileName" :src="authService.getFileDownloadUrl(file.id)"/>
+            </div>
+          </div>
+
+          <!-- 본문 내용 -->
           <div class="post-body" v-html="formatPostContent(post.content)"></div>
 
+          <!-- 첨부 파일 리스트 -->
           <div v-if="post.fileIds && post.fileIds.length > 0" class="attachments">
             <div class="attachment-icon">
               <i class="fas fa-paperclip"></i>
               <span>{{ post.fileIds.length }} 첨부 파일</span>
+            </div>
+            <div class="attachment-list">
+              <div v-for="file in files" :key="file.id" class="attachment-item">
+                <div class="attachment-link">
+                  <a :download="file.fileName" :href="authService.getFileDownloadUrl(file.id)">
+                    {{ file.fileName }}
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -69,6 +87,37 @@
                   <span class="comment-date">
                     {{ formatDate(comment.updatedAt) }}
                   </span>
+                  <button
+                      v-if="replyingTo !== comment.id"
+                      class="reply-button"
+                      @click="showReplyForm(comment.id)"
+                  >
+                    답글
+                  </button>
+                </div>
+              </div>
+
+              <!-- 답글 입력 폼 -->
+              <div v-if="replyingTo === comment.id" class="reply-form">
+                <textarea
+                    v-model="newReply.content"
+                    class="reply-input"
+                    placeholder="답글을 입력하세요"
+                ></textarea>
+                <div class="reply-form-actions">
+                  <button
+                      :disabled="isSubmitting"
+                      class="submit-reply-button"
+                      @click="submitReply(comment.id)"
+                  >
+                    {{ isSubmitting ? '등록 중...' : '등록' }}
+                  </button>
+                  <button
+                      class="cancel-reply-button"
+                      @click="cancelReply"
+                  >
+                    취소
+                  </button>
                 </div>
               </div>
 
@@ -117,6 +166,7 @@
     </div>
   </div>
 </template>
+
 <style scoped>
 .post-detail {
   background-color: #f8f9fa;
@@ -169,6 +219,19 @@
   margin-bottom: 2rem;
 }
 
+.post-images {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.content-image img {
+  max-width: 100%;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
 .post-body {
   font-size: 1.1rem;
   line-height: 1.6;
@@ -176,10 +239,39 @@
 }
 
 .attachments {
-  margin: 1rem 0;
+  margin: 1.5rem 0;
   background-color: #f8f9fa;
   padding: 0.75rem;
   border-radius: 4px;
+}
+
+.attachment-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attachment-link a {
+  color: #007bff;
+  text-decoration: none;
+}
+
+.attachment-link a:hover {
+  text-decoration: underline;
 }
 
 .post-actions {
@@ -210,6 +302,7 @@
   background-color: #f8f9fa;
   padding: 1.5rem;
   border-radius: 8px;
+  margin-top: 2rem;
 }
 
 .comments-header h3 {
@@ -229,12 +322,78 @@
   color: #666;
   font-size: 0.8rem;
   margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.reply-button {
+  margin-left: auto;
+  background-color: transparent;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  color: #666;
+  cursor: pointer;
+}
+
+.reply-button:hover {
+  background-color: #f1f3f5;
+}
+
+.reply-form {
+  margin-top: 1rem;
+  background-color: #f1f3f5;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.reply-input {
+  width: 100%;
+  min-height: 80px;
+  padding: 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 4px;
+  resize: vertical;
+  margin-bottom: 0.75rem;
+}
+
+.reply-form-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.submit-reply-button,
+.cancel-reply-button {
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  border: none;
+  cursor: pointer;
+}
+
+.submit-reply-button {
+  background-color: #000;
+  color: white;
+}
+
+.cancel-reply-button {
+  background-color: #e5e5e5;
+  color: #333;
 }
 
 .replies {
   margin-top: 1rem;
   border-left: 2px solid #e5e5e5;
   padding-left: 1rem;
+}
+
+.reply {
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
 .comment-form {
@@ -258,6 +417,7 @@
   padding: 0.75rem 1.5rem;
   border-radius: 4px;
   font-weight: 500;
+  cursor: pointer;
 }
 
 .loading-state, .not-found {
@@ -293,6 +453,7 @@ export default {
       post: null,
       allMenus: [],
       comments: [],
+      files: [], // 파일 정보 저장
       newComment: {content: '', postId: null, userId: null, authorName: ''},
       newReply: {content: '', postId: null, userId: null, authorName: ''},
       replyingTo: null,
@@ -301,7 +462,20 @@ export default {
       currentUser: null,
       showEmailDropdown: null,
       blog: null,
+      authService, // authService를 직접 접근하기 위해 추가
     };
+  },
+  computed: {
+    listRoute() {
+      if (this.$route.query.fromAll === 'true') {
+        return `/${this.blogUrl}`;
+      }
+      return `/${this.blogUrl}/${this.menuId}`;
+    },
+    // 이미지 파일만 필터링
+    imageFiles() {
+      return this.files.filter(file => this.isImage(file.contentType));
+    },
   },
   watch: {
     '$route.query.refresh': {
@@ -313,14 +487,6 @@ export default {
   },
   async created() {
     await this.loadPostAndMenus();
-  },
-  computed: {
-    listRoute() {
-      if (this.$route.query.fromAll === 'true') {
-        return `/${this.blogUrl}`;
-      }
-      return `/${this.blogUrl}/${this.menuId}`;
-    },
   },
   methods: {
     async loadPostAndMenus() {
@@ -350,29 +516,51 @@ export default {
         this.newReply.userId = this.currentUser.id;
         this.newReply.authorName = this.newComment.authorName;
 
+        // 파일 정보 로드
+        if (this.post.fileIds && this.post.fileIds.length > 0) {
+          await this.loadFiles();
+        }
+
         this.processMenus();
       } catch (error) {
         this.post = null;
         this.blog = null;
         this.allMenus = [];
         this.comments = [];
+        this.files = [];
         this.$router.push('/login');
       } finally {
         this.isLoading = false;
       }
     },
+
+    async loadFiles() {
+      try {
+        const filePromises = this.post.fileIds.map(fileId => authService.getFileById(fileId));
+        this.files = await Promise.all(filePromises);
+      } catch (error) {
+        console.error('파일 로드 실패:', error);
+        this.files = [];
+      }
+    },
+
+    isImage(contentType) {
+      return contentType && contentType.startsWith('image/');
+    },
+
     formatPostDate(date) {
-      // Implement a more human-readable date format
       return this.formatDate(date);
     },
+
     formatPostContent(content) {
-      // Optional: Add basic HTML formatting or line breaks
       return content.replace(/\n/g, '<br>');
     },
+
     getCurrentMenuName() {
       const currentMenu = this.allMenus.find(menu => menu.id === this.post.menuId);
       return currentMenu ? currentMenu.name : '분류 없음';
     },
+
     processMenus() {
       const menuMap = new Map();
       this.allMenus.forEach(menu => {
@@ -389,14 +577,11 @@ export default {
     },
 
     processComments(comments) {
-      // 댓글 필터링: deleted: false인 댓글만
       const filteredComments = comments.filter(comment => !comment.deleted);
-
       filteredComments.forEach(comment => {
         comment.authorName = comment.authorName || 'Unknown';
         comment.email = comment.email || 'N/A';
         if (comment.replies && comment.replies.length > 0) {
-          // 답글 필터링: deleted: false인 답글만
           comment.replies = comment.replies.filter(reply => !reply.deleted);
           comment.replies.forEach(reply => {
             reply.authorName = reply.authorName || 'Unknown';
@@ -406,7 +591,6 @@ export default {
           comment.replies = [];
         }
       });
-
       return filteredComments;
     },
 

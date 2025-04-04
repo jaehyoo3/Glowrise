@@ -238,6 +238,20 @@ const authService = {
             throw error;
         }
     },
+    async getFileById(fileId) {
+        const token = localStorage.getItem('accessToken');
+        const response = await axios.get(`${API_URL}/api/files/${fileId}`, {
+            headers: {
+                headers: {Authorization: `Bearer ${token}`},
+            },
+        });
+        return response.data;
+    },
+
+    // 파일 다운로드 URL 생성 메서드 추가
+    getFileDownloadUrl(fileId) {
+        return `${API_URL}/api/files/download/${fileId}`;
+    },
 
     // 블로그 URL 가용성 확인
     checkBlogUrlAvailability: async (url) => {
@@ -328,6 +342,7 @@ const authService = {
             throw error;
         }
     },
+
 
     // 메뉴 ID로 게시글 조회
     getPostsByMenuId: async (menuId) => {
