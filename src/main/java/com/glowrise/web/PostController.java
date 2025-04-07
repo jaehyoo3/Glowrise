@@ -1,5 +1,6 @@
 package com.glowrise.web;
 
+import com.glowrise.domain.enumerate.TimePeriod;
 import com.glowrise.service.PostService;
 import com.glowrise.service.dto.PostDTO;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,13 +9,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.List;
@@ -26,45 +26,32 @@ public class PostController {
     private final PostService postService;
 
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PostDTO> createPost(
             @RequestPart("dto") PostDTO dto,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
             Authentication authentication) throws IOException {
-        checkAuthentication(authentication);
-        System.out.println("Received DTO: " + dto);
-        System.out.println("Received files count: " + (files != null ? files.size() : 0));
-        if (files != null) {
-            files.forEach(file -> System.out.println("File name: " + file.getOriginalFilename() + ", Size: " + file.getSize()));
-        } else {
-            System.out.println("No files received");
-        }
-        try {
-            PostDTO createdPost = postService.createPost(dto, files, authentication);
-            return ResponseEntity.ok(createdPost);
-        } catch (IllegalArgumentException e) {
-            System.out.println("Error: " + e.getMessage());
-            return ResponseEntity.badRequest().body(null);
-        }
+        PostDTO createdPost = postService.createPost(dto, files, authentication);
+        return ResponseEntity.ok(createdPost);
     }
 
     @PutMapping(value = "/{postId}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<PostDTO> updatePost(
             @PathVariable Long postId,
             @RequestPart("dto") PostDTO dto,
             @RequestPart(value = "files", required = false) List<MultipartFile> files,
             Authentication authentication) throws IOException {
-        checkAuthentication(authentication);
         PostDTO updatedPost = postService.updatePost(postId, dto, files, authentication);
         return ResponseEntity.ok(updatedPost);
     }
 
     @DeleteMapping("/{postId}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deletePost(
             @PathVariable Long postId,
-            @RequestParam Long userId,
             Authentication authentication) {
-        checkAuthentication(authentication);
-        postService.deletePost(postId, userId, authentication);
+        postService.deletePost(postId, authentication);
         return ResponseEntity.noContent().build();
     }
 
@@ -85,15 +72,20 @@ public class PostController {
             @PathVariable Long postId,
             HttpServletRequest request,
             Authentication authentication) {
-        String clientIp = request.getRemoteAddr(); // 기본 IP 추출
-        // 프록시 환경에서는 X-Forwarded-For 헤더를 고려해야 할 수 있음
+        String clientIp = request.getRemoteAddr();
         String forwardedFor = request.getHeader("X-Forwarded-For");
         if (forwardedFor != null && !forwardedFor.isEmpty()) {
-            clientIp = forwardedFor.split(",")[0].trim(); // 첫 번째 IP 사용
+            clientIp = forwardedFor.split(",")[0].trim();
         }
-
         PostDTO post = postService.getPostById(postId, clientIp, authentication);
         return ResponseEntity.ok(post);
+    }
+
+    @GetMapping("/getPopular")
+    public ResponseEntity<List<PostDTO>> getPopularPosts(
+            @RequestParam(defaultValue = "WEEKLY") TimePeriod period) { // 기본값 주간
+        List<PostDTO> posts = postService.getPopularPostsByRecentModification(period, 10);
+        return ResponseEntity.ok(posts);
     }
 
     @GetMapping("/blog/{blogId}/{menuId}")
@@ -106,7 +98,6 @@ public class PostController {
         return ResponseEntity.ok(posts);
     }
 
-    // menuId가 없는 경우: 전체 게시글 조회
     @GetMapping("/blog/{blogId}")
     public ResponseEntity<Page<PostDTO>> getPostsByBlogId(
             @PathVariable Long blogId,
@@ -114,11 +105,5 @@ public class PostController {
             @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
         Page<PostDTO> posts = postService.getPosts(blogId, null, searchKeyword, pageable);
         return ResponseEntity.ok(posts);
-    }
-
-    private void checkAuthentication(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다.");
-        }
     }
 }

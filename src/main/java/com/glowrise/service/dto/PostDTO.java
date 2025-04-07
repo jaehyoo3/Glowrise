@@ -22,17 +22,16 @@ public class PostDTO {
     private List<Long> fileIds = new ArrayList<>();
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private Integer fileCount;
+    private Long fileCount;
 
     public PostDTO(Long id, String title, String content, Long menuId, Long userId,
-                   Long viewCount, List<Long> fileIds, LocalDateTime createdAt, LocalDateTime updatedAt, Integer fileCount) {
+                   Long viewCount, LocalDateTime createdAt, LocalDateTime updatedAt, Long fileCount) {
         this.id = id;
         this.title = title;
         this.content = content;
         this.menuId = menuId;
         this.userId = userId;
         this.viewCount = viewCount;
-        this.fileIds = fileIds;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.fileCount = fileCount;

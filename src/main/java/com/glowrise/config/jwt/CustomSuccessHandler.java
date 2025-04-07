@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
-import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -48,7 +47,7 @@ public class CustomSuccessHandler implements AuthenticationSuccessHandler {
 
         // 수정: userId를 포함한 토큰 생성
         String accessToken = jwtUtil.generateAccessToken(userId, username, role, 60 * 60 * 1000L); // 1시간
-        String refreshToken = jwtUtil.generateRefreshToken(username, 7 * 24 * 60 * 60 * 1000L); // 7일
+        String refreshToken = jwtUtil.generateRefreshToken(username, 24 * 60 * 60 * 1000L); // 1일
 
         userEntity.setAccessToken(accessToken);
         userEntity.setRefreshToken(refreshToken);

@@ -453,7 +453,7 @@ export default {
       post: null,
       allMenus: [],
       comments: [],
-      files: [], // 파일 정보 저장
+      files: [],
       newComment: {content: '', postId: null, userId: null, authorName: ''},
       newReply: {content: '', postId: null, userId: null, authorName: ''},
       replyingTo: null,
@@ -462,7 +462,7 @@ export default {
       currentUser: null,
       showEmailDropdown: null,
       blog: null,
-      authService, // authService를 직접 접근하기 위해 추가
+      authService,
     };
   },
   computed: {
@@ -472,7 +472,6 @@ export default {
       }
       return `/${this.blogUrl}/${this.menuId}`;
     },
-    // 이미지 파일만 필터링
     imageFiles() {
       return this.files.filter(file => this.isImage(file.contentType));
     },
@@ -508,15 +507,20 @@ export default {
         const commentsResponse = await authService.getCommentsByPostId(this.postId);
         this.comments = this.processComments(commentsResponse);
 
-        this.currentUser = await authService.getCurrentUser();
-        this.newComment.postId = this.postId;
-        this.newComment.userId = this.currentUser.id;
-        this.newComment.authorName = this.currentUser.nickName || this.currentUser.username;
-        this.newReply.postId = this.postId;
-        this.newReply.userId = this.currentUser.id;
-        this.newReply.authorName = this.newComment.authorName;
+        // 비회원도 접근 가능하도록 getCurrentUser 호출을 조건부로 처리
+        const storedUser = authService.getStoredUser();
+        if (storedUser) {
+          this.currentUser = await authService.getCurrentUser();
+          this.newComment.postId = this.postId;
+          this.newComment.userId = this.currentUser?.id;
+          this.newComment.authorName = this.currentUser?.nickName || this.currentUser?.username;
+          this.newReply.postId = this.postId;
+          this.newReply.userId = this.currentUser?.id;
+          this.newReply.authorName = this.newComment.authorName;
+        } else {
+          this.currentUser = null; // 비회원일 경우 null로 설정
+        }
 
-        // 파일 정보 로드
         if (this.post.fileIds && this.post.fileIds.length > 0) {
           await this.loadFiles();
         }
@@ -528,7 +532,11 @@ export default {
         this.allMenus = [];
         this.comments = [];
         this.files = [];
-        this.$router.push('/login');
+        // 에러 발생 시에도 /login으로 리다이렉트하지 않음
+        // 404나 권한 문제일 경우 별도 처리 가능
+        if (error.response?.status === 404) {
+          this.$router.push('/404');
+        }
       } finally {
         this.isLoading = false;
       }
@@ -539,7 +547,6 @@ export default {
         const filePromises = this.post.fileIds.map(fileId => authService.getFileById(fileId));
         this.files = await Promise.all(filePromises);
       } catch (error) {
-        console.error('파일 로드 실패:', error);
         this.files = [];
       }
     },
@@ -595,6 +602,11 @@ export default {
     },
 
     async submitComment() {
+      if (!this.currentUser) {
+        alert('댓글을 작성하려면 로그인이 필요합니다.');
+        this.$router.push('/login');
+        return;
+      }
       if (!this.newComment.content.trim()) {
         alert('댓글 내용을 입력하세요.');
         return;
@@ -617,11 +629,21 @@ export default {
     },
 
     showReplyForm(commentId) {
+      if (!this.currentUser) {
+        alert('답글을 작성하려면 로그인이 필요합니다.');
+        this.$router.push('/login');
+        return;
+      }
       this.replyingTo = commentId;
       this.newReply.content = '';
     },
 
     async submitReply(parentId) {
+      if (!this.currentUser) {
+        alert('답글을 작성하려면 로그인이 필요합니다.');
+        this.$router.push('/login');
+        return;
+      }
       if (!this.newReply.content.trim()) {
         alert('답글 내용을 입력하세요.');
         return;

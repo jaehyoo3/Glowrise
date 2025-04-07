@@ -13,7 +13,6 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -29,7 +28,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
 @EnableWebSecurity
 @EnableMethodSecurity
 @Configuration
@@ -38,7 +36,7 @@ public class SecurityConfig {
 
     private final CustomOAuth2UserService customOAuth2UserService;
     private final CustomSuccessHandler customSuccessHandler;
-    private final JWTFilter jwtFilter; // 주입받음
+    private final JWTFilter jwtFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -53,11 +51,38 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                .requestMatchers("/api/users/signup", "/login", "/api/users/refresh",
-                                        "/oauth2/authorization/**", "/login/oauth2/code/**", "/h2-console/**", "/h2-console/", "/h2-console"
-                                        , "/ws/**")
-                                .permitAll()
-                                .anyRequest().authenticated())
+                                // 인증 없이 접근 가능한 엔드포인트
+                                .requestMatchers(
+                                        "/api/posts",           // 전체 게시글 조회
+                                        "/api/posts/{postId}",  // 특정 게시글 조회
+                                        "/api/posts/user/{userId}", // 사용자별 게시글 조회
+                                        "/api/posts/blog/{blogId}", // 블로그별 게시글 조회
+                                        "/api/posts/blog/{blogId}/{menuId}", // 블로그 메뉴별 게시글 조회
+                                        "/api/blogs",           // 전체 블로그 조회
+                                        "/api/blogs/{url}",     // URL로 블로그 조회
+                                        "/api/blogs/id/{id}",   // ID로 블로그 조회
+                                        "/api/blogs/user/{userId}", // 사용자별 블로그 조회
+                                        "/api/menus/blog/{blogId}", // 블로그별 메뉴 조회
+                                        "/api/menus/{menuId}/submenus", // 서브메뉴 조회
+                                        "/api/comments/post/{postId}", // 게시글별 댓글 조회
+                                        "/api/comments/{commentId}", // 특정 댓글 조회
+                                        "/api/comments/{commentId}/replies", // 댓글의 답글 조회
+                                        "/api/files/{fileId}",  // 파일 정보 조회
+                                        "/api/files/download/{fileId}" // 파일 다운로드
+                                ).permitAll()
+                                // 회원가입, 로그인, 리프레시 토큰 등 인증 없이 접근 가능한 엔드포인트
+                                .requestMatchers(
+                                        "/api/users/signup",
+                                        "/login",
+                                        "/api/users/refresh",
+                                        "/oauth2/authorization/**",
+                                        "/login/oauth2/code/**",
+                                        "/h2-console/**",
+                                        "/ws/**"
+                                ).permitAll()
+                                // 나머지 모든 요청은 인증 필요
+                                .anyRequest().authenticated()
+                )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form
                         .loginProcessingUrl("/login")
@@ -77,7 +102,7 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfoEndpointConfig ->
                                 userInfoEndpointConfig.userService(customOAuth2UserService))
-                        .successHandler(customSuccessHandler) // CustomSuccessHandler에서 리다이렉션 처리
+                        .successHandler(customSuccessHandler)
                         .authorizationEndpoint(authorization -> authorization
                                 .baseUri("/oauth2/authorization"))
                         .redirectionEndpoint(redirection -> redirection
@@ -90,6 +115,7 @@ public class SecurityConfig {
                 .securityMatcher(request -> !request.getRequestURI().startsWith("/h2-console"))
                 .build();
     }
+
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
@@ -98,14 +124,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:3000")); // Vue 프론트엔드 출처
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH")); // 허용 메서드
-        config.setAllowedHeaders(List.of("*")); // 모든 헤더 허용
-        config.setAllowCredentials(true); // 쿠키/인증 정보 허용
-        config.setMaxAge(3600L); // 사전 요청 캐시 시간 (1시간)
-
+        config.setAllowedOrigins(List.of("http://localhost:3000"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config); // 모든 경로에 적용
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 }

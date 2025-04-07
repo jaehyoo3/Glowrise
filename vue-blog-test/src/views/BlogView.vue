@@ -180,7 +180,7 @@ export default {
       currentUser: null,
       selectedPosts: [],
       currentPage: 0,
-      currentPageInput: 1, // 텍스트 박스에 표시될 값 (1부터 시작)
+      currentPageInput: 1,
       pageSize: 20,
       searchKeyword: '',
     };
@@ -189,7 +189,7 @@ export default {
     this.currentMenuId = this.menuId || this.$route.params.menuId;
     await this.loadBlogAndMenus();
     await this.loadPosts();
-    this.currentPageInput = this.currentPage + 1; // 초기값 설정
+    this.currentPageInput = this.currentPage + 1;
   },
   watch: {
     '$route.params.menuId'(newMenuId) {
@@ -200,7 +200,7 @@ export default {
       this.loadPosts();
     },
     currentPage(newPage) {
-      this.currentPageInput = newPage + 1; // currentPage가 변경될 때 입력값 동기화
+      this.currentPageInput = newPage + 1;
     },
   },
   computed: {
@@ -225,16 +225,21 @@ export default {
           if (routeMenuId) {
             this.selectedMenu = this.menus.find(menu => menu.id === Number(routeMenuId));
           }
-          this.currentUser = await authService.getCurrentUser();
-          this.isOwner = blog.userId !== null && this.currentUser?.id === blog.userId;
+          // 비회원도 접근 가능하도록 getCurrentUser 호출을 조건부로 처리
+          const storedUser = authService.getStoredUser();
+          if (storedUser) {
+            this.currentUser = await authService.getCurrentUser();
+            this.isOwner = blog.userId !== null && this.currentUser?.id === blog.userId;
+          } else {
+            this.currentUser = null;
+            this.isOwner = false;
+          }
         }
       } catch (error) {
         if (error.response?.status === 404) {
           this.$router.push('/404');
-        } else if (error.response?.status === 403) {
-          this.$router.push('/unauthorized');
         } else {
-          this.blog = null;
+          this.blog = null; // 비회원일 경우에도 블로그가 없으면 null로 설정
         }
       } finally {
         this.isLoading = false;
@@ -262,7 +267,6 @@ export default {
         this.posts.content = postsData.content || [];
         this.posts.totalPages = postsData.totalPages || 0;
       } catch (error) {
-        console.error('Error loading posts:', error);
         this.posts.content = [];
         this.posts.totalPages = 0;
       }
@@ -281,11 +285,11 @@ export default {
       }
     },
     updatePage() {
-      const newPage = this.currentPageInput - 1; // 입력값은 1부터 시작하므로 -1
+      const newPage = this.currentPageInput - 1;
       if (newPage >= 0 && newPage < this.posts.totalPages) {
         this.changePage(newPage);
       } else {
-        this.currentPageInput = this.currentPage + 1; // 유효하지 않으면 원래 값으로 되돌림
+        this.currentPageInput = this.currentPage + 1;
         alert(`페이지 번호는 1에서 ${this.posts.totalPages} 사이여야 합니다.`);
       }
     },

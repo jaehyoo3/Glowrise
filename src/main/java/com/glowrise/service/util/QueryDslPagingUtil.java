@@ -1,8 +1,6 @@
 package com.glowrise.service.util;
 
 import com.querydsl.jpa.JPQLQuery;
-import com.querydsl.jpa.impl.JPAQueryFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -12,13 +10,6 @@ import java.util.List;
 
 @Component
 public class QueryDslPagingUtil {
-    private final JPAQueryFactory queryFactory;
-
-    @Autowired
-    public QueryDslPagingUtil(JPAQueryFactory queryFactory) {
-        this.queryFactory = queryFactory;
-    }
-
     /**
      * QueryDSL을 사용한 공통 페이징 처리
      *

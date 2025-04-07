@@ -3,18 +3,16 @@ package com.glowrise.web;
 
 import com.glowrise.service.UserService;
 import com.glowrise.service.dto.UserDTO;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.*;
-import jakarta.servlet.http.Cookie;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,25 +29,28 @@ public class UserController {
         return ResponseEntity.ok(createdUser);
     }
 
-    // 사용자 정보 조회
     @GetMapping("/profile/{username}")
     public ResponseEntity<UserDTO> getUserProfile(@PathVariable String username) throws Exception {
         UserDTO userProfile = userService.getUserProfile(username);
         return ResponseEntity.ok(userProfile);
     }
 
-    // 사용자 정보 수정
     @PutMapping("/profile/{username}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserDTO> updateUserProfile(
             @PathVariable String username,
-            @RequestBody UserDTO dto) throws Exception {
+            @RequestBody UserDTO dto,
+            Authentication authentication) throws Exception {
         UserDTO updatedUser = userService.updateUserProfile(username, dto);
         return ResponseEntity.ok(updatedUser);
     }
 
-    // 부분 업데이트
     @PatchMapping("/{id}")
-    public ResponseEntity<UserDTO> partialUpdateUser(@PathVariable Long id, @RequestBody UserDTO dto) throws Exception {
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<UserDTO> partialUpdateUser(
+            @PathVariable Long id,
+            @RequestBody UserDTO dto,
+            Authentication authentication) throws Exception {
         dto.setId(id);
         Optional<UserDTO> updatedUser = userService.partialUpdateUser(dto);
         return updatedUser.map(ResponseEntity::ok)
@@ -59,7 +60,6 @@ public class UserController {
     @PostMapping("/refresh")
     public ResponseEntity<?> refreshToken(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = getCookieValue(request, "RefreshToken");
-
         try {
             Map<String, String> result = userService.refreshToken(refreshToken, response);
             return ResponseEntity.ok(result);
@@ -67,6 +67,16 @@ public class UserController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body("{\"error\": \"Unauthorized\", \"message\": \"" + e.getMessage() + "\"}");
         }
+    }
+
+    @PutMapping("/me/nickname")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> updateUserNickname(@RequestBody UserDTO request, Authentication authentication) {
+        // 서비스 호출 (유효성 검증 및 로직 처리 위임)
+        // 서비스에서 예외 발생 시 @ControllerAdvice 에서 처리됨
+        userService.updateUserNickname(request.getNickName(), authentication);
+        // 서비스 호출이 성공적으로 완료되면 OK 응답 반환
+        return ResponseEntity.ok().build();
     }
 
     private String getCookieValue(HttpServletRequest request, String name) {
@@ -80,6 +90,7 @@ public class UserController {
     }
 
     @GetMapping("/me")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserDTO> getCurrentUser(Authentication authentication) {
         UserDTO userDTO = userService.getCurrentUser2(authentication);
         return ResponseEntity.ok(userDTO);

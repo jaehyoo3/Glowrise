@@ -1,6 +1,7 @@
 package com.glowrise.service;
 
 import com.glowrise.config.jwt.JWTUtil;
+import com.glowrise.config.jwt.dto.CustomOAuthUser;
 import com.glowrise.domain.Blog;
 import com.glowrise.domain.User;
 import com.glowrise.domain.enumerate.ROLE;
@@ -12,20 +13,20 @@ import com.glowrise.service.mapper.UserMapper;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.mapstruct.Named;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.security.core.Authentication;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
-
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -254,6 +255,98 @@ public class UserService {
         }
         return userDTO;
     }
+
+    /**
+     * 현재 로그인된 사용자의 닉네임을 업데이트합니다.
+     *
+     * @param newNickname    변경할 새 닉네임
+     * @param authentication 현재 인증 정보
+     * @throws UsernameNotFoundException 사용자를 찾을 수 없을 때
+     * @throws IllegalArgumentException  닉네임 유효성 검증 실패 시
+     */
+    @Transactional
+    public void updateUserNickname(String newNickname, Authentication authentication) {
+        log.info("닉네임 변경 서비스 시작 - 요청된 닉네임: '{}'", newNickname);
+
+        // 1. 입력값 기본 검증 (null 또는 공백)
+        // StringUtils.hasText()는 null, 빈 문자열, 공백만 있는 문자열 모두 false 반환
+        if (!StringUtils.hasText(newNickname)) {
+            log.warn("닉네임 변경 실패: 닉네임이 비어있거나 공백입니다.");
+            throw new IllegalArgumentException("닉네임은 비어 있을 수 없습니다.");
+        }
+        String trimmedNickname = newNickname.trim(); // 앞뒤 공백 제거 후 사용
+
+        // 2. 인증 정보에서 사용자 ID 추출
+        Long userId = getUserIdFromAuthentication(authentication); // 기존 헬퍼 메소드 사용
+        log.debug("사용자 ID 추출 완료: {}", userId);
+
+        // 3. 사용자 조회
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> {
+                    log.warn("닉네임 변경 실패: 사용자를 찾을 수 없습니다. ID: {}", userId);
+                    // UsernameNotFoundException 또는 커스텀 예외 사용 가능
+                    return new UsernameNotFoundException("사용자를 찾을 수 없습니다. ID: " + userId);
+                });
+
+        // 4. 닉네임 유효성 검증 (Business Logic Validation) - 이 메소드 내부에서 IllegalArgumentException 발생시킴
+        validateNickname(trimmedNickname, user.getId());
+        log.debug("닉네임 유효성 검증 통과: {}", trimmedNickname);
+
+        // 5. 닉네임 업데이트 및 저장
+        user.setNickName(trimmedNickname);
+        // userRepository.save(user); // @Transactional 이므로 변경 감지로 자동 저장됨 (명시적 save도 무방)
+        log.info("사용자 ID {}의 닉네임이 '{}'(으)로 성공적으로 변경되었습니다.", userId, trimmedNickname);
+    }
+
+    /**
+     * Authentication 객체에서 사용자 ID를 추출하는 헬퍼 메소드.
+     * (이전 코드와 동일)
+     */
+    private Long getUserIdFromAuthentication(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("인증 정보가 없습니다.");
+        }
+        // 방법 1: Principal이 CustomOAuthUser 타입인 경우
+        if (authentication.getPrincipal() instanceof CustomOAuthUser userPrincipal) {
+            if (userPrincipal.getUserId() != null) {
+                return userPrincipal.getUserId();
+            }
+        }
+        // 방법 2: JWTFilter에서 details 맵에 userId를 넣은 경우
+        Object details = authentication.getDetails();
+        if (details instanceof Map) {
+            Object userIdObj = ((Map<?, ?>) details).get("userId");
+            if (userIdObj instanceof Long) return (Long) userIdObj;
+            if (userIdObj instanceof Integer) return ((Integer) userIdObj).longValue();
+            if (userIdObj instanceof String) try {
+                return Long.parseLong((String) userIdObj);
+            } catch (NumberFormatException e) { /* 무시 */ }
+        }
+        log.error("인증 정보에서 사용자 ID를 추출할 수 없습니다. Principal: {}, Details: {}", authentication.getPrincipal(), authentication.getDetails());
+        throw new IllegalStateException("인증 정보에서 사용자 ID를 추출할 수 없습니다.");
+    }
+
+    /**
+     * 닉네임 유효성을 검증하는 메소드 (예시).
+     * (이전 코드와 동일 - IllegalArgumentException 발생시킴)
+     */
+    private void validateNickname(String nickname, Long currentUserId) {
+        // 길이 검증
+        if (nickname.length() < 2 || nickname.length() > 15) {
+            throw new IllegalArgumentException("닉네임은 2자 이상 15자 이하로 입력해주세요.");
+        }
+        // 형식 검증 (예: 특수문자 제한)
+        if (!nickname.matches("^[a-zA-Z0-9가-힣_]+$")) {
+            throw new IllegalArgumentException("닉네임은 영문, 숫자, 한글, 밑줄(_)만 사용 가능합니다.");
+        }
+        // 중복 검증 (자기 자신 제외)
+        userRepository.findByNickName(nickname).ifPresent(user -> {
+            if (!Objects.equals(user.getId(), currentUserId)) {
+                throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
+            }
+        });
+    }
+
 
 
 }

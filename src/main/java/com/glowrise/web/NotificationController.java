@@ -6,6 +6,7 @@ import com.glowrise.service.NotificationService;
 import com.glowrise.service.dto.NotificationDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,6 +21,7 @@ public class NotificationController {
     private final UserRepository userRepository;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<NotificationDTO>> getNotifications(Authentication authentication) {
         Long userId = getUserIdFromAuthentication(authentication);
         List<NotificationDTO> notifications = notificationService.getNotifications(userId);
@@ -27,6 +29,7 @@ public class NotificationController {
     }
 
     @PutMapping("/{id}/read")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> markAsRead(@PathVariable Long id, Authentication authentication) {
         Long userId = getUserIdFromAuthentication(authentication);
         notificationService.markAsRead(userId, id);
@@ -34,9 +37,6 @@ public class NotificationController {
     }
 
     private Long getUserIdFromAuthentication(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new IllegalStateException("로그인이 필요합니다.");
-        }
         String username = authentication.getName();
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));
