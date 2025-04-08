@@ -1,4 +1,4 @@
-# Glowrise Backend Server (Toy Project)
+# Glowrise (Blog Service - Toy Project)
 
 [![Java](https://img.shields.io/badge/Java-17+-orange.svg)](https://www.java.com)
 [![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.x-brightgreen.svg)](https://spring.io/projects/spring-boot)
@@ -12,7 +12,8 @@
 [![WebSocket](https://img.shields.io/badge/Realtime-WebSocket-blueviolet.svg)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
 [![Docker](https://img.shields.io/badge/Docker-Container-blue.svg)](https://www.docker.com/)
 [![Gradle](https://img.shields.io/badge/Build-Gradle-teal.svg)](https://gradle.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) **Glowrise**
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<br>**Glowrise**
 는 개인 포트폴리오 목적으로 개발된 풀스택 토이 프로젝트입니다. **본인이 직접 개발한 Spring Boot 기반 백엔드 서버**와 **AI 도구를 활용하여 생성된 Vue.js 프론트엔드**로 구성되어
 있으며, [블로그 서비스] 애플리케이션의 기반을 제공합니다.
 
