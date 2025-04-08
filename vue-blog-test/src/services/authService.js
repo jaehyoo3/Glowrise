@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// --- 설정 ---
 // API 주소는 요청대로 변경하지 않습니다.
 const API_URL = 'http://localhost:8080';
 const FRONTEND_URL = 'http://localhost:3000';

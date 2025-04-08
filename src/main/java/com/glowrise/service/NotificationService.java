@@ -2,7 +2,6 @@ package com.glowrise.service;
 
 import com.glowrise.domain.Notification;
 import com.glowrise.repository.NotificationRepository;
-import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.NotificationDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -16,7 +15,6 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
 
     @Transactional(readOnly = true)
     public List<NotificationDTO> getNotifications(Long userId) {

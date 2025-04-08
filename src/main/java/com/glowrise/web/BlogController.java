@@ -9,7 +9,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
 @RestController
 @RequestMapping("/api/blogs")
 @RequiredArgsConstructor
@@ -26,11 +25,11 @@ public class BlogController {
 
     @PatchMapping("/{blogId}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Optional<BlogDTO>> updateBlog(
+    public ResponseEntity<BlogDTO> updateBlog(
             @PathVariable Long blogId,
             @RequestBody BlogDTO dto,
             Authentication authentication) {
-        Optional<BlogDTO> updatedBlog = blogService.updateBlog(blogId, dto, authentication);
+        BlogDTO updatedBlog = blogService.updateBlog(blogId, dto, authentication);
         return ResponseEntity.ok(updatedBlog);
     }
 

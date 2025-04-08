@@ -11,7 +11,6 @@ import java.util.Optional;
 
 @Repository
 public interface MenuRepository extends JpaRepository<Menu, Long> {
-    List<Menu> findByBlogId(Long blogId);
     List<Menu> findByParentId(Long parentId);
 
     @Query("SELECT COALESCE(MAX(m.orderIndex), -1) FROM Menu m WHERE m.blog.id = :blogId")
@@ -19,6 +18,9 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
 
     @Query("SELECT m.id FROM Menu m WHERE m.id = :parentId OR m.parent.id = :parentId")
     List<Long> findAllMenuIdsByParent(@Param("parentId") Long parentId);
+
+    // 블로그 ID로 메뉴 목록 조회 (정렬 포함)
+    List<Menu> findByBlogIdOrderByOrderIndexAsc(Long blogId);
 }
 
 

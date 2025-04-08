@@ -11,4 +11,6 @@ public interface BlogRepository extends JpaRepository<Blog, Long> {
     Optional<Blog> findByUserId(Long userId);
     boolean existsByUrl(String url);
     Optional<Blog> findByUrl(String url);
+
+    boolean existsByUserId(Long userId);
 }

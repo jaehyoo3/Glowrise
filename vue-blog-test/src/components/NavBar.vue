@@ -90,7 +90,10 @@
         </template>
 
         <template v-else>
-          <button class="login-button" @click="openLoginModal">로그인</button>
+          <div class="auth-buttons">
+            <button class="signup-button" @click="openSignupModal">회원가입</button>
+            <button class="login-button" @click="openLoginModal">로그인</button>
+          </div>
         </template>
       </div>
     </div>
@@ -109,11 +112,11 @@
 <script>
 import authService from '@/services/authService';
 import {websocketService} from '@/services/websocketService';
-import LoginSignupModal from '@/components/LoginSignupModal.vue'; // 모달 컴포넌트 임포트 경로 확인
+import LoginSignupModal from '@/components/LoginSignupModal.vue';
 
 export default {
   name: 'NavBar',
-  components: {LoginSignupModal}, // 모달 컴포넌트 등록
+  components: {LoginSignupModal},
   data() {
     return {
       searchQuery: '',
@@ -123,39 +126,30 @@ export default {
       userId: null,
       userName: '',
       nickName: '',
-      userEmail: '', // OAuth 완료 데이터 전달 및 상태 확인용
+      userEmail: '',
       userProfileImage: '',
       isLoggingOut: false,
       hasBlog: false,
       blogUrl: '',
       notifications: [],
       unreadCount: 0,
-
-      // --- 모달 관련 상태 ---
-      showLoginModal: false,               // 모달 표시 여부
-      modalInitialTab: 'login',          // 모달 열 때 기본 탭
-      oauthCompletionDataForModal: null, // 모달에 전달할 OAuth 데이터
+      showLoginModal: false,
+      modalInitialTab: 'login',
+      oauthCompletionDataForModal: null,
     };
   },
   mounted() {
     document.addEventListener('click', this.handleOutsideClick);
-    // 페이지 로드 시 OAuth 프로필 완료 필요한지 확인
     this.checkOAuthCompletionOnLoad();
-    // *** 전역 상태 관리 또는 이벤트 버스 구독 설정 위치 ***
-    // 예: eventBus.$on('auth-changed', this.checkLoginStatus);
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleOutsideClick);
     if (websocketService) websocketService.disconnect();
-    // *** 전역 상태 관리 또는 이벤트 버스 구독 해제 위치 ***
-    // 예: eventBus.$off('auth-changed', this.checkLoginStatus);
   },
   created() {
-    // 컴포넌트 생성 시 로그인 상태 확인 (초기 로드)
     this.checkLoginStatus();
   },
   methods: {
-    // 드롭다운 외부 클릭 시 닫기
     handleOutsideClick(event) {
       const userMenu = this.$el.querySelector('.user-menu');
       const notificationMenu = this.$el.querySelector('.notification-menu');
@@ -165,25 +159,21 @@ export default {
         this.showNotificationDropdown = false;
       }
     },
-    // 사용자 메뉴 토글
     toggleUserDropdown() {
       this.showUserDropdown = !this.showUserDropdown;
       if (this.showUserDropdown) this.showNotificationDropdown = false;
     },
-    // 알림 메뉴 토글
     toggleNotificationDropdown() {
       this.showNotificationDropdown = !this.showNotificationDropdown;
       if (this.showNotificationDropdown) {
         this.showUserDropdown = false;
-        this.fetchNotifications(); // 알림 메뉴 열 때 갱신
+        this.fetchNotifications();
       }
     },
-    // 드롭다운 닫기
     closeDropdown() {
       this.showUserDropdown = false;
       this.showNotificationDropdown = false;
     },
-    // 로그인 상태 및 사용자 정보 확인/업데이트
     async checkLoginStatus() {
       const user = authService.getStoredUser();
       if (user && user.id) {
@@ -218,7 +208,6 @@ export default {
             this.resetAuthStates();
             return;
           }
-          // 네트워크 오류 등은 일단 로그인 상태 유지 시도
         }
 
         if (this.isLoggedIn) {
@@ -231,7 +220,6 @@ export default {
         if (this.isLoggedIn) this.resetAuthStates();
       }
     },
-    // 인증 관련 상태 초기화
     resetAuthStates() {
       this.isLoggedIn = false;
       this.userId = null;
@@ -245,7 +233,6 @@ export default {
       this.unreadCount = 0;
       if (websocketService) websocketService.disconnect();
     },
-    // 블로그 소유 상태 확인
     async checkBlogStatus() {
       if (!this.userId || !this.isLoggedIn) {
         this.hasBlog = false;
@@ -262,7 +249,6 @@ export default {
         this.blogUrl = '';
       }
     },
-    // 알림 목록 가져오기
     async fetchNotifications() {
       if (!this.isLoggedIn) return;
       try {
@@ -275,11 +261,9 @@ export default {
         this.unreadCount = 0;
       }
     },
-    // 웹소켓 연결
     connectWebSocket() {
       if (!this.userId || !websocketService || !this.isLoggedIn) return;
       websocketService.disconnect();
-      // eslint-disable-next-line no-unused-vars --- ESLint 오탐 수정
       websocketService.connect(this.userId, (notification) => {
         console.log('WebSocket notification received:', notification);
         if (!this.notifications.some(n => n.id === notification.id)) {
@@ -291,7 +275,6 @@ export default {
         }
       });
     },
-    // 알림 클릭 처리
     async handleNotificationClick(notification) {
       if (!notification || !notification.id) {
         console.error("잘못된 알림 객체", notification);
@@ -300,7 +283,7 @@ export default {
       try {
         if (!notification.isRead) {
           await authService.markNotificationAsRead(notification.id);
-          await this.fetchNotifications(); // 목록 갱신
+          await this.fetchNotifications();
         }
         if (notification.blogUrl && notification.menuId && notification.postId) {
           this.$router.push(`/${notification.blogUrl}/${notification.menuId}/${notification.postId}`);
@@ -313,8 +296,6 @@ export default {
         alert('알림 처리 실패');
       }
     },
-    // 날짜 포맷팅 유틸리티
-    // eslint-disable-next-line no-unused-vars --- ESLint 오탐 수정
     formatDate(dateString) {
       if (!dateString) return '';
       try {
@@ -327,7 +308,6 @@ export default {
         return dateString;
       }
     },
-    // 로그아웃 처리
     async handleLogout() {
       try {
         this.isLoggingOut = true;
@@ -345,7 +325,6 @@ export default {
         this.closeDropdown();
       }
     },
-    // 검색 처리
     handleSearch() {
       const query = this.searchQuery.trim();
       if (query) {
@@ -355,8 +334,6 @@ export default {
             });
       }
     },
-    // --- 모달 관련 메소드 ---
-    /** 페이지 로드 시 OAuth 프로필 완료 필요 여부 확인 */
     checkOAuthCompletionOnLoad() {
       const completionDataString = sessionStorage.getItem('oauth_profile_completion');
       if (completionDataString) {
@@ -375,49 +352,51 @@ export default {
         this.oauthCompletionDataForModal = null;
       }
     },
-    /** 로그인 버튼 클릭 시 모달 열기 */
     openLoginModal() {
       console.log("NavBar: 로그인 모달 열기");
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'login';
       this.showLoginModal = true;
     },
-    /** 드롭다운 '닉네임 설정하기' 클릭 시 모달 열기 */
+    openSignupModal() {
+      console.log("NavBar: 회원가입 모달 열기");
+      this.oauthCompletionDataForModal = null;
+      this.modalInitialTab = 'signup';
+      this.showLoginModal = true;
+    },
     openProfileCompletionModal() {
       console.log("NavBar: 프로필 완료 모달 열기 (드롭다운)");
       this.oauthCompletionDataForModal = {email: this.userEmail, oauthName: this.userName};
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
-      this.closeDropdown(); // 드롭다운 닫기
+      this.closeDropdown();
     },
-    /** 모달 닫기 */
     closeLoginModal() {
       this.showLoginModal = false;
       this.oauthCompletionDataForModal = null;
     },
-    /** 모달에서 인증 성공 시 콜백 */
     handleAuthSuccess() {
       console.log("NavBar: 모달 인증 성공. 상태 갱신.");
       this.closeLoginModal();
-      // 약간의 딜레이 후 상태 갱신 (모달 닫히는 시간 고려)
       setTimeout(() => {
         this.checkLoginStatus();
-      }, 100); // 100ms 딜레이 (조정 가능)
+      }, 100);
     }
   }
 };
 </script>
 
 <style scoped>
-/* NavBar 스타일은 이전 답변의 최종본과 동일하게 사용 */
 .navbar {
   background-color: white;
-  border-bottom: 1px solid #e5e5e5;
+  border-bottom: 1px solid #e0e0e0;
   padding: 1rem 0;
   position: sticky;
   top: 0;
   z-index: 1000;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
+
 .container {
   max-width: 1200px;
   margin: 0 auto;
@@ -427,23 +406,27 @@ export default {
   padding: 0 1.5rem;
   box-sizing: border-box;
 }
+
 .navbar-brand .logo {
   font-size: 1.75rem;
   font-weight: 700;
   color: #000;
   text-decoration: none;
+  letter-spacing: -0.5px;
 }
+
 .search-bar {
   flex-grow: 1;
   max-width: 450px;
   position: relative;
   margin: 0 2rem;
 }
+
 .search-bar input {
   width: 100%;
   padding: 0.6rem 2.5rem 0.6rem 1rem;
-  border: 1px solid #ddd;
-  border-radius: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
   font-size: 0.9rem;
   background-color: #f8f9fa;
   box-sizing: border-box;
@@ -451,10 +434,11 @@ export default {
 }
 
 .search-bar input:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  border-color: #333;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
   outline: none;
 }
+
 .search-button {
   position: absolute;
   right: 10px;
@@ -466,10 +450,12 @@ export default {
   cursor: pointer;
   padding: 5px;
 }
+
 .navbar-menu {
   display: flex;
   align-items: center;
 }
+
 .notification-menu {
   display: flex;
   align-items: center;
@@ -484,11 +470,12 @@ export default {
   font-size: 1.3rem;
   color: #333;
 }
+
 .notification-badge {
   position: absolute;
   top: -6px;
   right: -8px;
-  background-color: #ff4d4f;
+  background-color: #333;
   color: white;
   border-radius: 50%;
   padding: 2px 5px;
@@ -497,15 +484,16 @@ export default {
   line-height: 1;
   min-width: 16px;
   text-align: center;
-  box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
 }
+
 .dropdown-menu {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
   background-color: white;
   border: 1px solid #e0e0e0;
-  border-radius: 6px;
+  border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   min-width: 160px;
   padding: 0.5rem 0;
@@ -520,6 +508,7 @@ export default {
   max-height: 400px;
   overflow-y: auto;
 }
+
 .dropdown-item {
   display: block;
   padding: 0.7rem 1.2rem;
@@ -535,8 +524,9 @@ export default {
   box-sizing: border-box;
   cursor: pointer;
 }
+
 .dropdown-item:hover {
-  background-color: #f8f9fa;
+  background-color: #f5f5f5;
 }
 
 .notification-item {
@@ -551,12 +541,12 @@ export default {
 }
 
 .notification-item.unread {
-  background-color: #eef6ff;
+  background-color: #f5f5f5;
   font-weight: 500;
 }
 
 .notification-item.unread:hover {
-  background-color: #e0f0ff;
+  background-color: #ebebeb;
 }
 
 .notification-item span {
@@ -618,14 +608,13 @@ button.dropdown-item {
   color: #333;
 }
 
-/* 기본 색상 일치 */
 button.dropdown-item.logout-btn {
-  color: #d9534f;
+  color: #555;
+  font-weight: 500;
 }
 
-/* 로그아웃만 빨간색 */
 button.dropdown-item:hover:not(:disabled) {
-  background-color: #f8f9fa;
+  background-color: #f5f5f5;
 }
 
 button.dropdown-item:disabled {
@@ -633,22 +622,40 @@ button.dropdown-item:disabled {
   cursor: not-allowed;
   background-color: transparent;
 }
-.login-button {
-  color: #007bff;
+
+.auth-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.login-button, .signup-button {
   font-weight: 500;
-  text-decoration: none;
   font-size: 0.9rem;
   padding: 0.5rem 1rem;
-  border: 1px solid #007bff;
   border-radius: 4px;
-  background-color: white;
   cursor: pointer;
-  transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out;
+  transition: all 0.2s ease;
+}
+
+.login-button {
+  color: #333;
+  background-color: white;
+  border: 1px solid #333;
 }
 
 .login-button:hover {
-  background-color: #007bff;
+  background-color: #f5f5f5;
+}
+
+.signup-button {
   color: white;
+  background-color: #333;
+  border: 1px solid #333;
+}
+
+.signup-button:hover {
+  background-color: #000;
 }
 
 @media (max-width: 768px) {
@@ -681,6 +688,16 @@ button.dropdown-item:disabled {
     margin: 0 0.5rem;
   }
 
-  /* .dropdown-menu { left: 50%; transform: translateX(-50%); right: auto; } */
+  .auth-buttons {
+    width: 100%;
+    justify-content: center;
+    margin-top: 0.5rem;
+  }
+
+  .login-button, .signup-button {
+    flex: 1;
+    max-width: 120px;
+    text-align: center;
+  }
 }
 </style>

@@ -57,3 +57,5 @@ spring:
             user-name-attribute: response
   jwt:
     secret: cxvasdokjqhwoieh9uidshfusdhf9wuefh9we8ry892374ewjkrh23iuh8v9ef3489fn394f9
+file:
+  upload-dir: D:/uploads/
