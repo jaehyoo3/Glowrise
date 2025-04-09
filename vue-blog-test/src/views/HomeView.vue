@@ -1,6 +1,5 @@
 <template>
   <div class="home">
-    <NavBar />
     <div class="container">
       <div class="home-content">
         <div class="hero-section">
@@ -18,8 +17,8 @@
               <div v-if="isPostsLoading" class="loading-state">
                 <span>Loading popular posts...</span>
               </div>
-              <div v-else-if="!popularPosts || popularPosts.length === 0" class="placeholder-posts"><p>Trending content
-                coming soon...</p>
+              <div v-else-if="!popularPosts || popularPosts.length === 0" class="placeholder-posts">
+                <p>Trending content coming soon...</p>
               </div>
               <div v-else class="posts-grid">
                 <div
@@ -65,25 +64,32 @@
           </div>
 
           <div class="blog-sidebar">
-            <div v-if="isLoading" class="loading-state">
+            <div v-if="isSidebarLoading" class="loading-state">
               <span>Loading...</span>
             </div>
             <div v-else-if="!isLoggedIn" class="login-prompt">
               <h3>Start Your Blog</h3>
-              <p>Sign in to create your personal space</p>
-              <p style="margin-top: 1rem; font-size: 0.9em; color: #555;">Please use the login button above.</p>
+              <p>Sign in or sign up to create your personal space and share your stories.</p>
+              <p style="margin-top: 1rem; font-size: 0.9em; color: #555;">Please use the login/signup buttons in the
+                navigation bar.</p>
             </div>
-            <div v-else-if="!blog" class="create-blog-prompt">
-              <h3>Your Blog</h3>
-              <p>You haven't created a blog yet.</p>
-              <router-link v-if="userNickname" class="btn-secondary" to="/blog/create">Create Blog</router-link>
-              <p v-else>Please set your nickname first. (Check user menu in NavBar)</p>
+            <div v-else-if="isLoggedIn && !hasBlog" class="create-blog-prompt">
+              <h3>Your Blog Awaits</h3>
+              <template v-if="nickName">
+                <p>You haven't created a blog yet. Let's get started!</p>
+                <router-link class="btn-secondary" to="/blog/create">Create Your Blog</router-link>
+              </template>
+              <template v-else>
+                <p>Welcome! Please set your nickname first to create a blog.</p>
+                <p style="font-size: 0.85em; color: #666;">(You can set it from the user menu in the navigation bar)</p>
+              </template>
             </div>
-            <div v-else class="blog-info">
-              <h3>{{ blog.title }}</h3>
+            <div v-else-if="isLoggedIn && hasBlog" class="blog-info">
+              <h3>My Blog: {{ blogTitle }}</h3>
+              <p>Manage your blog or view it live.</p>
               <div class="blog-actions">
-                <router-link :to="`/${blog.url}`" class="btn-primary">View Blog</router-link>
-                <router-link v-if="blog.id" :to="`/blog/edit/${blog.id}`" class="btn-secondary">Edit</router-link>
+                <router-link :to="`/${blogUrl}`" class="btn-primary">View Blog</router-link>
+                <router-link v-if="blogId" :to="`/blog/edit/${blogId}`" class="btn-secondary">Manage Blog</router-link>
               </div>
             </div>
           </div>
@@ -94,165 +100,116 @@
 </template>
 
 <script>
-import NavBar from '@/components/NavBar.vue'; // NavBar 컴포넌트 임포트
-import authService from '@/services/authService'; // 인증 서비스 임포트
+import {mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
+import authService from '@/services/authService'; // 인기글 로딩 등 직접 API 호출용
 
 export default {
   name: 'HomeView',
-  components: {NavBar}, // 컴포넌트 등록
+  // NavBar는 App.vue 등 상위에서 관리한다고 가정
+  // components: { NavBar },
   data() {
     return {
-      blog: null,              // 로그인한 사용자의 블로그 정보
-      isLoading: true,         // 사이드바 블로그 정보 로딩 상태
-      isLoggedIn: false,       // 로그인 여부 상태
-      userNickname: '',        // 로그인한 사용자의 닉네임 (사이드바 조건부 렌더링용)
-      popularPosts: [],        // 인기 게시글 목록 (항상 배열로 유지)
-      isPostsLoading: true,    // 인기 게시글 로딩 상태
-      selectedPeriod: 'WEEKLY',// 인기 게시글 기간 (기본값: 주간)
-      // --- 닉네임 설정 모달 관련 data 제거됨 ---
+      // --- 로컬 상태 제거: blog, isLoggedIn, userNickname ---
+      // --- isLoading은 스토어 getter(isLoading) 또는 컴포넌트 자체 로딩(isPostsLoading)으로 대체 ---
+      popularPosts: [],        // 인기글 목록 (로컬 상태 유지)
+      isPostsLoading: true,    // 인기글 로딩 상태 (로컬 상태 유지)
+      selectedPeriod: 'WEEKLY',// 인기글 기간 (로컬 상태 유지)
     };
   },
-  async created() {
-    // 컴포넌트 생성 시 데이터 로드
-    await this.loadBlogAndCheckLogin();
-    // 로그인 상태가 확정된 후 인기 게시글 로드 (선택적)
-    // 또는 병렬 로드 후 로그인 상태에 따라 UI 제어
+  computed: {
+    // --- Vuex Getters/State 매핑 ---
+    ...mapGetters([
+      'isLoggedIn',       // 로그인 여부
+      'nickName',         // 닉네임 (표시용)
+      'username',         // 사용자 이름 (닉네임 없을 때 대비)
+      'hasBlog',          // 블로그 소유 여부
+      'blogUrl',          // 사용자 블로그 URL
+      'isLoadingUser',    // 스토어의 사용자 정보 로딩 상태
+      'isLoadingBlog',     // 스토어의 블로그 정보 로딩 상태
+      'blogId',           // 사용자 블로그 ID getter
+      'blogTitle',        // 사용자 블로그 제목 getter
+    ]),
+    // 스토어 상태 직접 매핑 (필요한 경우)
+    // ...mapState(['currentUser', 'userBlog']),
+
+    // 닉네임 또는 사용자 이름 표시
+    displayNicknameOrUsername() {
+      return this.nickName || this.username;
+    },
+    // 사이드바 로딩 상태 (스토어 로딩 상태 조합)
+    isSidebarLoading() {
+      return this.isLoadingUser || this.isLoadingBlog;
+    }
+    // ---------------------------
+  },
+  // --- 삭제: created 내부의 loadBlogAndCheckLogin 호출 ---
+  // --- 삭제: mounted, beforeUnmount, handleAuthChange (이벤트 리스너 관련) ---
+  // --- mounted 또는 created 에서 인기글 로딩 시작 ---
+  async mounted() {
+    console.log("HomeView: mounted hook. 인기글 로드 시작.");
     await this.loadPopularPosts();
-    // --- 닉네임 설정 모달 관련 checkShowNicknamePrompt() 호출 제거됨 ---
   },
   methods: {
-    // 로그인 상태 확인 및 블로그 정보 로드를 통합
-    async loadBlogAndCheckLogin() {
-      this.isLoading = true; // 사이드바 로딩 시작
-      try {
-        const storedUser = authService.getStoredUser();
-        this.isLoggedIn = !!storedUser; // 로그인 상태 설정
-        this.userNickname = storedUser?.nickName || ''; // 닉네임 상태 설정
+    // --- 삭제: loadBlogAndCheckLogin 메서드 ---
 
-        if (this.isLoggedIn) {
-          // 최신 사용자 정보 가져오기 (닉네임 포함)
-          try {
-            const currentUser = await authService.getCurrentUser();
-            if (currentUser) {
-              // authService.getCurrentUser에서 로컬 스토리지를 업데이트 했으므로 다시 읽기
-              const updatedUser = authService.getStoredUser();
-              this.userNickname = updatedUser?.nickName || ''; // 최신 닉네임
-              // 필요 시 다른 정보도 업데이트: this.isLoggedIn = true; 등
-            } else {
-              // getCurrentUser가 null 반환 시 (로그아웃 처리됨)
-              this.isLoggedIn = false;
-              this.userNickname = '';
-              this.blog = null;
-            }
-          } catch (authError) {
-            console.warn("홈 화면: 최신 사용자 정보 로드 실패", authError);
-            if (authError.response?.status === 401 || authError.response?.status === 403) {
-              this.isLoggedIn = false;
-              this.userNickname = '';
-              this.blog = null;
-            }
-            // 그 외 에러는 로컬 정보 기반으로 진행
-          }
-
-          // 최종 로그인 상태 확인 후 블로그 로드
-          if (this.isLoggedIn) {
-            try {
-              const blogData = await authService.getBlogByUserId();
-              this.blog = blogData;
-            } catch (blogError) {
-              // 블로그 정보 로드 실패 (404는 정상일 수 있음)
-              if (blogError.response?.status !== 404) {
-                console.error("홈 화면: 블로그 정보 로드 에러", blogError);
-              }
-              this.blog = null;
-            }
-          } else {
-            this.blog = null; // 로그인 상태 아니면 블로그 없음
-          }
-
-        } else {
-          this.blog = null; // 비회원
-        }
-      } catch (error) { // loadBlogAndCheckLogin 전체의 예외 처리 (거의 발생 안 함)
-        console.error('홈 화면: 초기 데이터 로드 중 예외 발생', error);
-        this.isLoggedIn = false;
-        this.userNickname = '';
-        this.blog = null;
-      } finally {
-        this.isLoading = false; // 사이드바 로딩 완료
-      }
-    },
-
-    // --- 닉네임 설정 모달 관련 메소드 제거됨 ---
-
-    // 인기 게시글 로드 (Array.isArray 추가된 버전)
+    // 인기글 로딩 메서드 (기존과 동일, authService 직접 사용)
     async loadPopularPosts() {
+      console.log(`HomeView: 인기글 로드 중 (${this.selectedPeriod})`);
+      this.isPostsLoading = true;
+      this.popularPosts = [];
       try {
-        this.isPostsLoading = true;
         const popularData = await authService.getPopularPosts(this.selectedPeriod);
-        console.log("Received from getPopularPosts:", popularData); // API 응답 데이터 확인용 로그
-
-        // *** 데이터 타입 확인 및 안전한 할당 ***
         if (Array.isArray(popularData)) {
-          this.popularPosts = popularData; // 배열이면 그대로 할당
+          this.popularPosts = popularData;
+          console.log(`HomeView: 인기글 로드 완료 (${this.popularPosts.length}개)`);
         } else {
-          console.warn("getPopularPosts did not return an array:", popularData);
-          this.popularPosts = []; // 배열이 아니면 빈 배열 할당
+          console.warn("HomeView: getPopularPosts 응답이 배열이 아님:", popularData);
+          this.popularPosts = [];
         }
-        // *** 수정 끝 ***
-
       } catch (error) {
-        console.error('인기 게시글 로드 실패:', error);
-        this.popularPosts = []; // 에러 발생 시에도 빈 배열 할당
+        console.error('HomeView: 인기글 로드 실패:', error);
+        this.popularPosts = [];
       } finally {
         this.isPostsLoading = false;
       }
     },
 
-    // 게시글 내용 요약 (HTML 태그 제거 포함)
+    // --- 나머지 메서드 (truncateContent, formatDate, navigateToPost, changeTimePeriod)는 기존과 동일 ---
     truncateContent(content) {
       if (!content) return '';
-      // 간단한 HTML 태그 제거
       const textContent = content.replace(/<[^>]*>/g, '');
-      const maxLength = 80; // 최대 글자 수
-      return textContent.length > maxLength ? textContent.substring(0, maxLength) + '...' : textContent;
+      const maxLength = 80;
+      if (textContent.length > maxLength) {
+        return textContent.substring(0, maxLength) + '...';
+      }
+      return textContent;
     },
-
-    // 날짜 포맷팅
     formatDate(dateString) {
       if (!dateString) return '';
       try {
         const date = new Date(dateString);
-        // 'YYYY. MM. DD.' 형식 (toLocaleDateString 옵션 활용)
         return date.toLocaleDateString('ko-KR', {year: 'numeric', month: '2-digit', day: '2-digit'}).replace(/\.$/, '');
       } catch (e) {
-        console.error("날짜 포맷팅 오류:", e);
-        return dateString; // 오류 시 원본 반환
+        return dateString;
       }
     },
-
-    // 인기 게시글 클릭 시 상세 페이지 이동
-    navigateToPost(post) { // post 객체를 받도록 수정
-      // 백엔드 응답에 blogUrl, menuId가 포함되어 있다고 가정
+    navigateToPost(post) {
       if (post && post.blogUrl && post.menuId && post.id) {
-        this.$router.push(`/${post.blogUrl}/${post.menuId}/${post.id}`);
+        const path = `/${post.blogUrl}/${post.menuId}/${post.id}`;
+        this.$router.push(path).catch({ /* ... */});
       } else {
-        console.warn("navigateToPost: 게시글 상세 정보 부족.", post);
-        // postId만으로 조회 가능한 대체 경로가 있다면 사용
-        // 예: this.$router.push(`/posts/${post.id}`);
+        console.warn("HomeView: 포스트 네비게이션 정보 부족.", post);
       }
     },
-
-    // 인기 게시글 기간 변경
     async changeTimePeriod(period) {
-      if (this.selectedPeriod === period) return; // 이미 선택된 기간이면 무시
+      if (this.selectedPeriod === period || this.isPostsLoading) return;
+      console.log(`HomeView: 인기글 기간 변경 -> ${period}`);
       this.selectedPeriod = period;
-      await this.loadPopularPosts(); // 변경된 기간으로 다시 로드
+      await this.loadPopularPosts();
     }
   }
 };
 </script>
-
 <style scoped>
 /* --- 기본 레이아웃 및 컨테이너 --- */
 .home {

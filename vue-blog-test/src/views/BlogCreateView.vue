@@ -1,6 +1,5 @@
 <template>
   <div class="blog-create">
-    <NavBar/>
     <div class="container">
       <div class="blog-create-content">
         <div class="blog-create-header">
@@ -68,47 +67,101 @@
 </template>
 
 <script>
-import NavBar from '@/components/NavBar.vue';
-import authService from '@/services/authService';
+import {mapActions, mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
+import authService from '@/services/authService'; // API 호출용 서비스 import
 
 export default {
   name: 'BlogCreateView',
-  components: {NavBar},
   data() {
     return {
-      form: {title: '', description: '', url: '', userId: null},
+      form: {
+        title: '',
+        description: '',
+        url: '',
+        userId: null // userId는 이제 스토어에서 가져옴
+      },
       urlAvailable: false,
-      urlError: ''
+      urlError: '',
+      isSubmitting: false, // 제출 중 상태 추가
     };
   },
+  computed: {
+    // 스토어 getter 매핑
+    ...mapGetters(['userId']) // 현재 로그인된 사용자의 ID 가져오기
+  },
   methods: {
+    // 스토어 액션 매핑
+    ...mapActions(['fetchUserBlog']), // 블로그 생성 후 상태 갱신용
+
     async checkUrl() {
+      // URL 유효성 검사 및 중복 확인 로직 (기존과 동일)
       this.urlError = '';
       this.urlAvailable = false;
       const urlPattern = /^[a-zA-Z0-9-]+$/;
+      if (!this.form.url) {
+        this.urlError = 'URL을 입력해주세요.';
+        return;
+      }
       if (!urlPattern.test(this.form.url)) {
         this.urlError = 'URL은 영문, 숫자, 하이픈(-)만 사용할 수 있습니다.';
         return;
       }
       try {
-        const available = await authService.checkUrlAvailability(this.form.url);
+        // authService 직접 호출 유지
+        const available = await authService.checkBlogUrlAvailability(this.form.url);
         this.urlAvailable = available;
         if (!available) {
           this.urlError = '이미 사용 중인 URL입니다.';
+        } else {
+          this.urlError = '사용 가능한 URL입니다.'; // 성공 메시지
         }
       } catch (error) {
         this.urlError = 'URL 확인 중 오류가 발생했습니다.';
       }
     },
     async handleCreateBlog() {
+      // URL 유효성 및 사용 가능 여부 최종 확인
+      if (!this.urlAvailable || this.urlError === '이미 사용 중인 URL입니다.' || this.urlError === 'URL 확인 중 오류가 발생했습니다.' || this.urlError.includes('URL은 영문')) {
+        alert('URL을 확인해주세요.');
+        return;
+      }
+      if (!this.form.title) {
+        alert('블로그 제목을 입력해주세요.');
+        return;
+      }
+
+      // 스토어에서 userId 가져와서 form에 설정
+      if (!this.userId) {
+        alert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.');
+        // 로그인 페이지로 리디렉션 등 처리
+        this.$router.push('/login'); // 예시
+        return;
+      }
+      this.form.userId = this.userId;
+
+      this.isSubmitting = true;
       try {
-        const user = await authService.getCurrentUser();
-        this.form.userId = user.id;
+        // authService 직접 호출하여 블로그 생성
         await authService.createBlog(this.form);
         alert('블로그가 생성되었습니다!');
-        this.$router.push('/');
+
+        // --- Vuex: 생성 성공 후, 스토어의 블로그 정보 갱신 ---
+        await this.fetchUserBlog(); // 사용자의 블로그 정보를 다시 불러옴
+        // --------------------------------------------------
+
+        // 사용자의 새 블로그 URL로 이동 (스토어 갱신 후 blogUrl getter 사용 가능)
+        // 또는 홈으로 이동
+        // const blogUrl = this.$store.getters.blogUrl; // 스토어 getter 접근 (만약 즉시 갱신된다면)
+        // if (blogUrl) {
+        //     this.$router.push(`/${blogUrl}`);
+        // } else {
+        this.$router.push('/'); // 우선 홈으로 이동
+        // }
+
       } catch (error) {
         alert('블로그 생성 실패: ' + (error.response?.data?.message || error.message));
+      } finally {
+        this.isSubmitting = false;
       }
     }
   }

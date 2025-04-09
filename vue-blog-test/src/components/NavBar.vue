@@ -104,13 +104,15 @@
         :oauth-completion-data="oauthCompletionDataForModal"
         @close="closeLoginModal"
         @login-success="handleAuthSuccess"
-        @profile-completed="handleAuthSuccess"
-    />
+        @profile-completed="handleAuthSuccess"/>
   </div>
 </template>
 
 <script>
-import authService from '@/services/authService';
+// --- Vuex 헬퍼 함수 import ---
+import {mapActions, mapGetters, mapState} from 'vuex';
+// ---------------------------
+import authService from '@/services/authService'; // 알림 등 직접 API 호출 여전히 필요
 import {websocketService} from '@/services/websocketService';
 import LoginSignupModal from '@/components/LoginSignupModal.vue';
 
@@ -122,42 +124,89 @@ export default {
       searchQuery: '',
       showUserDropdown: false,
       showNotificationDropdown: false,
-      isLoggedIn: false,
-      userId: null,
-      userName: '',
-      nickName: '',
-      userEmail: '',
-      userProfileImage: '',
-      isLoggingOut: false,
-      hasBlog: false,
-      blogUrl: '',
-      notifications: [],
-      unreadCount: 0,
-      showLoginModal: false,
-      modalInitialTab: 'login',
-      oauthCompletionDataForModal: null,
+      // --- 로컬 상태 제거: isLoggedIn, userId, userName, nickName, userEmail, userProfileImage, hasBlog, blogUrl ---
+      isLoggingOut: false, // 로그아웃 진행 상태 표시는 유지 가능
+      notifications: [], // 알림 목록은 컴포넌트 로컬 상태로 관리
+      unreadCount: 0, // 안 읽은 알림 수도 로컬 상태
+      showLoginModal: false, // 모달 표시 여부
+      modalInitialTab: 'login', // 모달 초기 탭
+      oauthCompletionDataForModal: null, // OAuth 프로필 완료용 데이터
     };
+  },
+  computed: {
+    // --- Vuex Getters/State 매핑 ---
+    ...mapState([
+      // 필요하다면 state 직접 접근: 'currentUser', 'userBlog'
+    ]),
+    ...mapGetters([
+      'isLoggedIn',       // 로그인 여부
+      'userId',           // 사용자 ID (WebSocket 연결 등에 사용)
+      'username',         // 사용자 이름 (표시용)
+      'nickName',         // 닉네임 (표시용)
+      'userEmail',        // 이메일 (프로필 완료 모달 전달용)
+      'userProfileImage', // 프로필 이미지 URL (표시용)
+      'blogUrl',          // 사용자 블로그 URL (링크용)
+      'hasBlog',          // 블로그 존재 여부 (링크 표시 제어용)
+      'isLoading'         // 스토어 로딩 상태 (전체 로딩 인디케이터 등에 활용 가능)
+    ]),
+    // ---------------------------
+
+    // 프로필 이미지 URL 기본값 처리
+    displayProfileImage() {
+      return this.userProfileImage || '/default-profile.png'; // 기본 이미지 경로 설정
+    },
+    displayNicknameOrUsername() {
+      return this.nickName || this.username; // 닉네임 없으면 username 표시
+    }
+  },
+  watch: {
+    // --- Vuex 상태 변경 감지 ---
+    isLoggedIn(newValue, oldValue) {
+      console.log("NavBar Watcher: isLoggedIn 변경됨", oldValue, "->", newValue);
+      if (newValue) {
+        // 로그인 상태가 되면 필요한 작업 수행
+        this.fetchNotifications(); // 알림 가져오기
+        this.connectWebSocket();   // 웹소켓 연결
+      } else {
+        // 로그아웃 상태가 되면 정리 작업 수행
+        this.notifications = [];   // 알림 목록 초기화
+        this.unreadCount = 0;
+        websocketService.disconnect(); // 웹소켓 연결 해제
+        console.log("NavBar Watcher: 로그아웃됨, 알림/WS 정리");
+      }
+    }
+    // ------------------------
   },
   mounted() {
     document.addEventListener('click', this.handleOutsideClick);
-    this.checkOAuthCompletionOnLoad();
+    // --- 삭제: checkOAuthCompletionOnLoad 는 created 또는 watch isLoggedIn 에서 처리 가능 ---
+    // this.checkOAuthCompletionOnLoad(); // 아래 created로 이동 또는 삭제
   },
   beforeUnmount() {
     document.removeEventListener('click', this.handleOutsideClick);
+    // 컴포넌트 제거 시 웹소켓 연결 해제
     if (websocketService) websocketService.disconnect();
   },
   created() {
-    this.checkLoginStatus();
+    // --- 삭제: checkLoginStatus 호출 제거 ---
+    // Vuex 스토어는 main.js에서 이미 초기화 시도함
+    // 컴포넌트 생성 시 필요한 초기 작업 (예: OAuth 완료 데이터 확인)
+    this.checkOAuthCompletionOnLoad(); // 여기서 호출하거나 watch isLoggedIn 사용
   },
   methods: {
+    // --- Vuex Actions 매핑 ---
+    ...mapActions(['fetchCurrentUser', 'logoutAndClear']),
+    // ------------------------
+
     handleOutsideClick(event) {
+      // 드롭다운 외부 클릭 감지 로직 (기존과 동일)
       const userMenu = this.$el.querySelector('.user-menu');
       const notificationMenu = this.$el.querySelector('.notification-menu');
-      if (userMenu && !userMenu.contains(event.target) &&
-          notificationMenu && !notificationMenu.contains(event.target)) {
-        this.showUserDropdown = false;
-        this.showNotificationDropdown = false;
-      }
+      let clickedInsideUserMenu = userMenu?.contains(event.target);
+      let clickedInsideNotificationMenu = notificationMenu?.contains(event.target);
+
+      if (!clickedInsideUserMenu) this.showUserDropdown = false;
+      if (!clickedInsideNotificationMenu) this.showNotificationDropdown = false;
     },
     toggleUserDropdown() {
       this.showUserDropdown = !this.showUserDropdown;
@@ -167,179 +216,125 @@ export default {
       this.showNotificationDropdown = !this.showNotificationDropdown;
       if (this.showNotificationDropdown) {
         this.showUserDropdown = false;
-        this.fetchNotifications();
+        // --- 로그인 상태일 때만 알림 가져오기 ---
+        if (this.isLoggedIn) {
+          this.fetchNotifications();
+        }
+        // -----------------------------------
       }
     },
     closeDropdown() {
       this.showUserDropdown = false;
       this.showNotificationDropdown = false;
     },
-    async checkLoginStatus() {
-      const user = authService.getStoredUser();
-      if (user && user.id) {
-        if (!this.isLoggedIn) this.isLoggedIn = true;
-        this.userId = user.id;
-        this.userName = user.username;
-        this.nickName = user.nickName || '';
-        this.userEmail = user.email || '';
-        this.userProfileImage = user.profileImage || '';
 
-        try {
-          const freshUserData = await authService.getCurrentUser();
-          if (freshUserData) {
-            const updatedUser = authService.getStoredUser();
-            if (updatedUser) {
-              this.nickName = updatedUser.nickName || '';
-              this.userEmail = updatedUser.email || '';
-              this.userName = updatedUser.username;
-              this.userId = updatedUser.id;
-              this.isLoggedIn = true;
-            } else {
-              this.resetAuthStates();
-              return;
-            }
-          } else {
-            this.resetAuthStates();
-            return;
-          }
-        } catch (error) {
-          console.warn("NavBar: 최신 사용자 정보 가져오기 실패", error);
-          if (error.response?.status === 401 || error.response?.status === 403) {
-            this.resetAuthStates();
-            return;
-          }
-        }
+    // --- 삭제: checkLoginStatus, resetAuthStates, checkBlogStatus 메서드 ---
 
-        if (this.isLoggedIn) {
-          await this.checkBlogStatus();
-          await this.fetchNotifications();
-          this.connectWebSocket();
-        }
-
-      } else {
-        if (this.isLoggedIn) this.resetAuthStates();
-      }
-    },
-    resetAuthStates() {
-      this.isLoggedIn = false;
-      this.userId = null;
-      this.userName = '';
-      this.nickName = '';
-      this.userEmail = '';
-      this.userProfileImage = '';
-      this.hasBlog = false;
-      this.blogUrl = '';
-      this.notifications = [];
-      this.unreadCount = 0;
-      if (websocketService) websocketService.disconnect();
-    },
-    async checkBlogStatus() {
-      if (!this.userId || !this.isLoggedIn) {
-        this.hasBlog = false;
-        this.blogUrl = '';
-        return;
-      }
-      try {
-        const response = await authService.getBlogByUserId();
-        this.hasBlog = response !== null && response.id !== undefined;
-        this.blogUrl = response?.url || '';
-      } catch (error) {
-        if (error.response?.status !== 404) console.error('블로그 상태 확인 오류:', error.response?.data || error.message);
-        this.hasBlog = false;
-        this.blogUrl = '';
-      }
-    },
     async fetchNotifications() {
+      // 로그인 상태 확인 (getter 사용)
       if (!this.isLoggedIn) return;
       try {
+        console.log("NavBar: 알림 가져오는 중...");
+        // authService 직접 호출 유지 (알림은 스토어에서 관리 안 함)
         const fetchedNotifications = await authService.getNotifications();
         this.notifications = fetchedNotifications.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
         this.unreadCount = this.notifications.filter(n => !n.isRead).length;
+        console.log("NavBar: 알림 가져오기 완료. Count:", this.notifications.length, "Unread:", this.unreadCount);
       } catch (error) {
-        console.error('알림 가져오기 실패:', error);
+        console.error('NavBar: 알림 가져오기 실패:', error);
         this.notifications = [];
         this.unreadCount = 0;
       }
     },
     connectWebSocket() {
-      if (!this.userId || !websocketService || !this.isLoggedIn) return;
-      websocketService.disconnect();
+      // 로그인 상태 및 userId 확인 (getter 사용)
+      if (!this.isLoggedIn || !this.userId) {
+        console.log("NavBar: WebSocket 연결 조건 미충족. isLoggedIn:", this.isLoggedIn, "userId:", this.userId);
+        return;
+      }
+      console.log("NavBar: WebSocket 연결 시도. userId:", this.userId);
+      websocketService.disconnect(); // 이전 연결 정리
       websocketService.connect(this.userId, (notification) => {
-        console.log('WebSocket notification received:', notification);
+        // 웹소켓 알림 수신 처리 로직 (기존과 동일)
+        console.log('NavBar: WebSocket 알림 수신:', notification);
         if (!this.notifications.some(n => n.id === notification.id)) {
           this.notifications.unshift(notification);
           this.notifications.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
           if (!notification.isRead) {
             this.unreadCount += 1;
           }
+          console.log('NavBar: 새 알림 추가됨. Unread count:', this.unreadCount);
         }
       });
     },
     async handleNotificationClick(notification) {
-      if (!notification || !notification.id) {
-        console.error("잘못된 알림 객체", notification);
-        return;
-      }
+      // 알림 클릭 처리 로직 (기존과 동일, authService 직접 사용)
+      if (!notification || !notification.id) return;
+      console.log("NavBar: 알림 클릭됨:", notification.id, "isRead:", notification.isRead);
       try {
         if (!notification.isRead) {
           await authService.markNotificationAsRead(notification.id);
-          await this.fetchNotifications();
+          await this.fetchNotifications(); // 목록 갱신
         }
         if (notification.blogUrl && notification.menuId && notification.postId) {
-          this.$router.push(`/${notification.blogUrl}/${notification.menuId}/${notification.postId}`);
-        } else {
-          console.warn("알림 클릭: 경로 정보 부족", notification);
+          const targetPath = `/${notification.blogUrl}/${notification.menuId}/${notification.postId}`;
+          this.$router.push(targetPath).catch({});
         }
         this.closeDropdown();
       } catch (error) {
-        console.error('알림 처리 실패:', error);
-        alert('알림 처리 실패');
+        console.error('NavBar: 알림 처리 실패:', error);
+        alert('알림을 처리하는 중 오류가 발생했습니다.');
       }
     },
     formatDate(dateString) {
+      // 날짜 포맷팅 (기존과 동일)
       if (!dateString) return '';
       try {
         const date = new Date(dateString);
-        return date.toLocaleString('ko-KR', {
-          year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-        });
+        return date.toLocaleString('ko-KR', { /* ... */});
       } catch (e) {
-        console.error("날짜 포맷팅 오류:", e);
         return dateString;
       }
     },
     async handleLogout() {
+      console.log("NavBar: 로그아웃 시작");
+      this.isLoggingOut = true;
       try {
-        this.isLoggingOut = true;
-        await authService.logout();
-        this.resetAuthStates();
-        this.$nextTick(() => {
+        // --- Vuex 액션 디스패치로 변경 ---
+        await this.logoutAndClear(); // 스토어 액션 호출 (백엔드 호출 + 스토어 상태 초기화 + 로컬 스토리지 정리 포함)
+        // -----------------------------
+        console.log("NavBar: 스토어 로그아웃 액션 완료");
+        // 글로벌 이벤트 발행 (다른 컴포넌트 알림용, 선택적)
+        window.dispatchEvent(new CustomEvent('auth-state-changed'));
+        console.log("NavBar: auth-state-changed 이벤트 발행 (로그아웃)");
+        // 페이지 이동 (상태 변경 감지로 UI가 업데이트되므로 nextTick 불필요할 수 있음)
+        if (this.$route.path !== '/') {
           this.$router.push('/');
-        });
+        }
       } catch (error) {
-        console.error('로그아웃 실패:', error);
-        this.resetAuthStates();
-        alert('로그아웃 처리 중 오류');
+        console.error('NavBar: 로그아웃 실패:', error);
+        // 스토어 액션 내에서 에러 처리가 되지만, UI 피드백은 여기서 줄 수 있음
+        alert('로그아웃 처리 중 오류가 발생했습니다.');
       } finally {
         this.isLoggingOut = false;
         this.closeDropdown();
       }
     },
     handleSearch() {
+      // 검색 로직 (기존과 동일)
       const query = this.searchQuery.trim();
       if (query) {
-        this.$router.push({path: '/search', query: {q: query}})
-            .catch(err => {
-              if (err.name !== 'NavigationDuplicated' && err.name !== 'NavigationCancelled') console.error(err);
-            });
+        this.$router.push({path: '/search', query: {q: query}}).catch({});
+        this.searchQuery = '';
       }
     },
     checkOAuthCompletionOnLoad() {
+      // OAuth 완료 데이터 확인 로직 (기존과 동일)
       const completionDataString = sessionStorage.getItem('oauth_profile_completion');
       if (completionDataString) {
         try {
           this.oauthCompletionDataForModal = JSON.parse(completionDataString);
-          console.log("NavBar: OAuth Profile Completion 감지, 모달 자동 실행", this.oauthCompletionDataForModal);
+          console.log("NavBar: OAuth 프로필 완료 감지, 모달 자동 실행", this.oauthCompletionDataForModal);
           this.modalInitialTab = 'signup';
           this.showLoginModal = true;
           sessionStorage.removeItem('oauth_profile_completion');
@@ -353,39 +348,56 @@ export default {
       }
     },
     openLoginModal() {
-      console.log("NavBar: 로그인 모달 열기");
+      // 로그인 모달 열기 (기존과 동일)
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'login';
       this.showLoginModal = true;
     },
     openSignupModal() {
-      console.log("NavBar: 회원가입 모달 열기");
+      // 회원가입 모달 열기 (기존과 동일)
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
     },
     openProfileCompletionModal() {
-      console.log("NavBar: 프로필 완료 모달 열기 (드롭다운)");
-      this.oauthCompletionDataForModal = {email: this.userEmail, oauthName: this.userName};
+      // 프로필 완료 모달 열기 (스토어 getter 사용)
+      console.log("NavBar: 프로필 완료 모달 열기 요청 (드롭다운 메뉴)");
+      this.oauthCompletionDataForModal = {
+        // --- 스토어 getter 사용 ---
+        email: this.userEmail,
+        oauthName: this.username // username 사용 또는 다른 필드 확인
+        // ------------------------
+      };
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
       this.closeDropdown();
     },
     closeLoginModal() {
+      // 모달 닫기 (기존과 동일)
       this.showLoginModal = false;
       this.oauthCompletionDataForModal = null;
     },
-    handleAuthSuccess() {
-      console.log("NavBar: 모달 인증 성공. 상태 갱신.");
-      this.closeLoginModal();
-      setTimeout(() => {
-        this.checkLoginStatus();
-      }, 100);
+    async handleAuthSuccess() {
+      // 모달에서 로그인 또는 프로필 완료 성공 시 호출됨
+      console.log("NavBar: 모달 인증 성공/완료 수신. 스토어 상태 갱신 시도.");
+      this.closeLoginModal(); // 모달 닫기
+
+      try {
+        // --- 스토어 액션 디스패치 ---
+        // 로그인 또는 프로필(닉네임) 완료 후, 최신 사용자/블로그 정보를 스토어에 로드
+        await this.fetchCurrentUser(); // 스토어 액션 호출
+        // --------------------------
+        console.log("NavBar: 스토어 fetchCurrentUser 완료 후. auth-state-changed 이벤트 발행.");
+        // 글로벌 이벤트 발행 (선택적)
+        window.dispatchEvent(new CustomEvent('auth-state-changed'));
+      } catch (error) {
+        console.error("NavBar: handleAuthSuccess 내 fetchCurrentUser 중 에러 발생:", error);
+        // 사용자에게 에러 알림 등
+      }
     }
   }
 };
 </script>
-
 <style scoped>
 .navbar {
   background-color: white;

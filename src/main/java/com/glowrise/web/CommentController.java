@@ -47,9 +47,8 @@ public class CommentController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> deleteComment(
             @PathVariable Long commentId,
-            @RequestParam Long userId,
             Authentication authentication) {
-        commentService.deleteComment(commentId, userId, authentication);
+        commentService.deleteComment(commentId, authentication);
         return ResponseEntity.noContent().build();
     }
 

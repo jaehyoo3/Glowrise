@@ -16,8 +16,10 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -153,10 +155,32 @@ public class MenuService {
 
     @Transactional(readOnly = true)
     public List<MenuDTO> getMenusByBlogId(Long blogId) {
-        // DB에서 정렬된 데이터 조회
+        // DB에서 Menu 엔티티 목록 조회 (정렬 포함)
         List<Menu> menus = menuRepository.findByBlogIdOrderByOrderIndexAsc(blogId);
-        // 매퍼를 사용하여 DTO 리스트로 변환
-        return menuMapper.toDto(menus);
+
+        // 수동으로 List<Menu> -> List<MenuDTO> 변환
+        List<MenuDTO> menuDtos = new ArrayList<>();
+        for (Menu menuEntity : menus) {
+            MenuDTO dto = new MenuDTO();
+            dto.setId(menuEntity.getId());
+            dto.setName(menuEntity.getName()); // 원본 이름 (들여쓰기 없음)
+            dto.setOrderIndex(menuEntity.getOrderIndex());
+            dto.setParentId(menuEntity.getParent() != null ? menuEntity.getParent().getId() : null);
+
+            // subMenuIds 설정 (null 체크 후 ID 추출 또는 빈 리스트)
+            if (menuEntity.getSubMenus() != null && !menuEntity.getSubMenus().isEmpty()) {
+                dto.setSubMenuIds(menuEntity.getSubMenus().stream()
+                        .map(Menu::getId)
+                        .collect(Collectors.toList()));
+            } else {
+                dto.setSubMenuIds(new ArrayList<>());
+            }
+
+            // blogId, postIds 설정 로직 제거됨
+
+            menuDtos.add(dto); // 리스트에 DTO 추가
+        }
+        return menuDtos; // 변환된 DTO 리스트 반환
     }
 
     @Transactional(readOnly = true)

@@ -18,6 +18,7 @@ import org.springframework.security.config.annotation.web.configurers.HeadersCon
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
@@ -60,6 +61,7 @@ public class SecurityConfig {
                                         "/api/posts/blog/{blogId}/{menuId}", // 블로그 메뉴별 게시글 조회
                                         "/api/blogs",           // 전체 블로그 조회
                                         "/api/blogs/{url}",     // URL로 블로그 조회
+                                        "/uploads/**",  // <-- 이 줄 추가!
                                         "/api/blogs/id/{id}",   // ID로 블로그 조회
                                         "/api/blogs/user/{userId}", // 사용자별 블로그 조회
                                         "/api/menus/blog/{blogId}", // 블로그별 메뉴 조회
@@ -82,6 +84,9 @@ public class SecurityConfig {
                                 ).permitAll()
                                 // 나머지 모든 요청은 인증 필요
                                 .anyRequest().authenticated()
+                )
+                .exceptionHandling(exceptionHandling ->
+                        exceptionHandling.authenticationEntryPoint(apiAuthenticationEntryPoint()) // 401 처리기 등록
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form
@@ -116,6 +121,13 @@ public class SecurityConfig {
                 .build();
     }
 
+    @Bean
+    public AuthenticationEntryPoint apiAuthenticationEntryPoint() {
+        return (request, response, authException) -> {
+            // API 요청에 대해 인증 실패 시 401 Unauthorized 에러 반환
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+        };
+    }
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();

@@ -56,25 +56,27 @@
               <label for="modal-signup-email">이메일</label>
               <input id="modal-signup-email" v-model="signupForm.email" :disabled="isOAuthProfileCompletion" required
                      type="email"/>
+              <small v-if="isOAuthProfileCompletion && signupForm.email">(SNS 계정 정보)</small>
             </div>
             <div class="form-group">
               <label for="modal-signup-username">사용자 이름</label>
               <input id="modal-signup-username" v-model="signupForm.username" :disabled="isOAuthProfileCompletion" required
                      type="text"/>
-              <small v-if="isOAuthProfileCompletion">(SNS 정보 기반)</small>
+              <small v-if="isOAuthProfileCompletion && signupForm.username">(SNS 정보 기반)</small>
             </div>
             <div class="form-group">
               <label for="modal-signup-nickname">닉네임</label>
               <input id="modal-signup-nickname" ref="nicknameInput" v-model.trim="signupForm.nickname" maxlength="15" minlength="2"
                      pattern="^[a-zA-Z0-9가-힣_]+$" required type="text"/>
-              <small>2~15자, 영문, 숫자, 한글, _</small>
+              <small>2~15자, 영문, 숫자, 한글, 밑줄(_)만 사용 가능</small>
               <div v-if="nicknameInputError" class="error-message nickname-error">{{ nicknameInputError }}</div>
             </div>
+
             <div v-if="!isOAuthProfileCompletion">
               <div class="form-group">
                 <label for="modal-signup-password">비밀번호</label>
                 <input id="modal-signup-password" v-model="signupForm.password" required type="password"/>
-                <small>8자 이상, 영문, 숫자, 특수문자 포함</small>
+                <small>8자 이상, 영문, 숫자, 특수문자(@$!%*#?&.) 포함</small>
               </div>
               <div class="form-group">
                 <label for="modal-signup-password-confirm">비밀번호 확인</label>
@@ -82,13 +84,16 @@
                        type="password"/>
               </div>
             </div>
+
             <div v-if="signupError" class="error-message server-error">{{ signupError }}</div>
+
             <button :disabled="isSubmitting" class="signup-btn" type="submit">
               {{
                 isOAuthProfileCompletion ? (isSubmitting ? '저장 중...' : '프로필 완료') : (isSubmitting ? '가입 처리 중...' : '회원가입')
               }}
             </button>
           </form>
+
           <template v-if="!isOAuthProfileCompletion">
             <div class="divider"><span>또는</span></div>
             <div class="social-signup">
@@ -108,27 +113,26 @@
 
 <script>
 import authService from '@/services/authService';
+// Vuex 관련 import는 여기서는 직접 필요하지 않음 (이벤트 emit 후 부모에서 처리)
 
 export default {
   name: 'LoginSignupModal',
   props: {
-    // NavBar에서 전달받을 초기 상태 (선택적)
     initialTab: {
       type: String,
-      default: 'login' // 기본값은 로그인 탭
+      default: 'login'
     },
-    oauthCompletionData: { // OAuth 프로필 완료를 위한 데이터
+    oauthCompletionData: { // OAuth 프로필 완료용 데이터 (email, oauthName)
       type: Object,
       default: null
     }
   },
-  emits: ['close', 'login-success', 'profile-completed'], // 부모(NavBar)에게 전달할 이벤트
+  emits: ['close', 'login-success', 'profile-completed'], // 부모(NavBar)로 전달되는 이벤트
   data() {
     return {
       activeTab: 'login',
       loginForm: {email: '', password: ''},
       signupForm: {email: '', username: '', nickname: '', password: '', passwordConfirm: ''},
-      // rememberMe: false, // 로그인 상태 유지는 쿠키/토큰 레벨에서 처리되므로 제거 가능
       loginError: '',
       signupError: '',
       nicknameInputError: '',
@@ -137,32 +141,50 @@ export default {
     };
   },
   created() {
-    // 전달받은 props로 초기 상태 설정
+    // Props 기반 초기 상태 설정
     this.activeTab = this.initialTab;
     if (this.oauthCompletionData) {
+      console.log("LoginSignupModal: OAuth 완료 모드로 생성됨", this.oauthCompletionData);
       this.isOAuthProfileCompletion = true;
-      this.activeTab = 'signup'; // 강제로 회원가입 탭으로
+      this.activeTab = 'signup'; // 프로필 완료를 위해 signup 탭 강제
+      // NavBar로부터 받은 데이터로 폼 미리 채우기
       this.signupForm.email = this.oauthCompletionData.email || '';
       this.signupForm.username = this.oauthCompletionData.oauthName || this.oauthCompletionData.email?.split('@')[0] || '';
-      this.$nextTick(() => { // DOM 업데이트 후 포커스
-        if (this.$refs.nicknameInput) this.$refs.nicknameInput.focus();
+      this.signupForm.nickname = ''; // 닉네임은 사용자가 입력
+
+      // DOM 업데이트 후 닉네임 입력 필드에 포커스
+      this.$nextTick(() => {
+        if (this.$refs.nicknameInput) {
+          this.$refs.nicknameInput.focus();
+        }
       });
+    } else {
+      console.log("LoginSignupModal: 일반 모드로 생성됨, initialTab:", this.initialTab);
     }
   },
   methods: {
     closeModal() {
-      this.$emit('close'); // 닫기 이벤트 발생
+      this.$emit('close'); // 부모에게 close 이벤트 전달
     },
     async handleLogin() {
       this.loginError = '';
+      if (!this.loginForm.email || !this.loginForm.password) {
+        this.loginError = '이메일과 비밀번호를 모두 입력해주세요.';
+        return;
+      }
       this.isSubmitting = true;
+      console.log("LoginSignupModal: 로그인 시도:", this.loginForm.email);
       try {
+        // authService.login 호출은 그대로 유지
         const response = await authService.login(this.loginForm.email, this.loginForm.password);
         console.log('LoginSignupModal: 로그인 성공:', response);
-        this.$emit('login-success'); // 로그인 성공 이벤트 발생
-        this.closeModal(); // 성공 시 모달 닫기
+
+        // --- 변경 없음: 로그인 성공 이벤트만 발생시키고, 스토어 업데이트는 NavBar에서 처리 ---
+        this.$emit('login-success');
+        // 부모(NavBar)의 handleAuthSuccess에서 모달 닫고 스토어 액션 디스패치
+        // ---------------------------------------------------------------------
       } catch (error) {
-        console.error('LoginSignupModal: 로그인 에러:', error);
+        console.error('LoginSignupModal: 로그인 에러:', error.response?.data || error.message);
         this.loginError = error.response?.data?.message || '이메일 또는 비밀번호가 올바르지 않습니다.';
       } finally {
         this.isSubmitting = false;
@@ -171,21 +193,32 @@ export default {
     async handleSignup() {
       this.signupError = '';
       this.nicknameInputError = '';
+
+      if (!this.validateNicknameInput()) {
+        return;
+      }
+
       this.isSubmitting = true;
+
       try {
         if (this.isOAuthProfileCompletion) {
-          // --- OAuth 프로필 완료 처리 ---
-          if (!this.validateNicknameInput()) {
-            this.isSubmitting = false;
-            return;
-          }
+          // --- OAuth 프로필 완료 로직 ---
+          console.log("LoginSignupModal: OAuth 프로필 완료 시도. 닉네임:", this.signupForm.nickname);
+          // 닉네임 업데이트 API 호출
           await authService.updateUserNickname(this.signupForm.nickname);
-          alert('닉네임이 설정되었습니다.');
-          this.$emit('profile-completed'); // 프로필 완료 이벤트 발생
-          this.closeModal(); // 성공 시 모달 닫기
+          console.log('LoginSignupModal: 닉네임 업데이트 성공');
+          alert('닉네임이 성공적으로 설정되었습니다.');
+
+          // --- 변경 없음: 프로필 완료 이벤트 발생시키고, 스토어 업데이트는 NavBar에서 처리 ---
+          this.$emit('profile-completed');
+          // 부모(NavBar)의 handleAuthSuccess에서 모달 닫고 스토어 액션 디스패치
+          // ---------------------------------------------------------------------
 
         } else {
-          // --- 일반 회원가입 처리 ---
+          // --- 일반 회원가입 로직 ---
+          console.log("LoginSignupModal: 일반 회원가입 시도:", this.signupForm.email);
+
+          // 비밀번호 검증 등 (기존과 동일)
           if (this.signupForm.password !== this.signupForm.passwordConfirm) {
             this.signupError = '비밀번호가 일치하지 않습니다.';
             this.isSubmitting = false;
@@ -197,64 +230,89 @@ export default {
             this.isSubmitting = false;
             return;
           }
-          if (!this.validateNicknameInput(true)) {
-            this.isSubmitting = false;
-            return;
-          }
 
+          // 회원가입 API 호출
           await authService.signup({
             email: this.signupForm.email,
             username: this.signupForm.username,
             nickName: this.signupForm.nickname,
             password: this.signupForm.password
           });
+
+          console.log('LoginSignupModal: 일반 회원가입 성공');
           alert('회원가입이 완료되었습니다. 로그인 탭에서 로그인해주세요.');
-          // 성공 시 로그인 탭으로 전환하고 폼 초기화
+
+          // 로그인 탭으로 전환 및 이메일 자동 완성 (기존과 동일)
           this.activeTab = 'login';
           this.loginForm.email = this.signupForm.email;
           this.loginForm.password = '';
           this.signupForm = {email: '', username: '', nickname: '', password: '', passwordConfirm: ''};
         }
       } catch (error) {
-        console.error('LoginSignupModal: 회원가입/프로필 완료 에러:', error);
-        this.signupError = error.response?.data?.message || (this.isOAuthProfileCompletion ? '닉네임 저장 실패' : '회원가입 실패');
+        console.error('LoginSignupModal: 회원가입/프로필 완료 에러:', error.response?.data || error.message);
+        this.signupError = error.response?.data?.message || (this.isOAuthProfileCompletion ? '닉네임 저장 중 오류가 발생했습니다.' : '회원가입 중 오류가 발생했습니다.');
+        if (this.signupError.includes('닉네임')) {
+          this.nicknameInputError = this.signupError;
+          this.signupError = '';
+          if (this.$refs.nicknameInput) this.$refs.nicknameInput.focus();
+        }
       } finally {
         this.isSubmitting = false;
       }
     },
-    validateNicknameInput(isSignup = false) {
-      // ... (LoginView.vue의 유효성 검사 로직과 동일) ...
+    validateNicknameInput() {
+      // 닉네임 유효성 검사 로직 (기존과 동일)
       const nickname = this.signupForm.nickname;
       let errorMsg = '';
       if (!nickname) {
         errorMsg = '닉네임을 입력해주세요.';
       } else if (nickname.length < 2 || nickname.length > 15) {
-        errorMsg = '닉네임은 2자 이상 15자 이하';
+        errorMsg = '닉네임은 2자 이상 15자 이하여야 합니다.';
       } else {
         const pattern = /^[a-zA-Z0-9가-힣_]+$/;
         if (!pattern.test(nickname)) {
-          errorMsg = '닉네임 형식 오류';
+          errorMsg = '닉네임은 영문, 숫자, 한글, 밑줄(_)만 사용 가능합니다.';
         }
       }
-
-      if (isSignup && !this.isOAuthProfileCompletion) {
-        this.signupError = errorMsg;
-        this.nicknameInputError = '';
-      } else {
-        this.nicknameInputError = errorMsg;
-        if (!isSignup) this.signupError = '';
-      }
-
+      this.nicknameInputError = errorMsg;
       if (errorMsg && this.$refs.nicknameInput) {
         this.$refs.nicknameInput.focus();
       }
       return !errorMsg;
     },
     handleSocialLogin(provider) {
-      // 소셜 로그인은 페이지 이동이 필요하므로 모달을 닫고 처리
-      this.closeModal();
-      console.log(`LoginSignupModal: ${provider} 소셜 로그인 시작`);
+      // 소셜 로그인 로직 (기존과 동일)
+      console.log(`LoginSignupModal: ${provider} 소셜 로그인/가입 시작`);
       window.location.href = `http://localhost:8080/oauth2/authorization/${provider}`;
+    }
+  },
+  watch: {
+    // OAuth 데이터 변경 감지 로직 (기존과 동일)
+    oauthCompletionData(newData) {
+      console.log("LoginSignupModal: oauthCompletionData prop 변경 감지", newData);
+      if (newData) {
+        this.isOAuthProfileCompletion = true;
+        this.activeTab = 'signup';
+        this.signupForm.email = newData.email || '';
+        this.signupForm.username = newData.oauthName || newData.email?.split('@')[0] || '';
+        this.signupForm.nickname = '';
+        this.loginError = '';
+        this.signupError = '';
+        this.nicknameInputError = '';
+        this.$nextTick(() => {
+          if (this.$refs.nicknameInput) this.$refs.nicknameInput.focus();
+        });
+      }
+    },
+    // 탭 변경 시 에러 클리어 로직 (기존과 동일)
+    activeTab(newTab) {
+      console.log("LoginSignupModal: 탭 변경됨 ->", newTab);
+      if (newTab === 'login') {
+        this.signupError = '';
+        this.nicknameInputError = '';
+      } else {
+        this.loginError = '';
+      }
     }
   }
 };

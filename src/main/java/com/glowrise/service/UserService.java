@@ -1,17 +1,16 @@
 package com.glowrise.service;
 
 import com.glowrise.config.jwt.JWTUtil;
-import com.glowrise.config.jwt.dto.CustomOAuthUser;
-import com.glowrise.domain.Blog;
 import com.glowrise.domain.User;
 import com.glowrise.domain.enumerate.ROLE;
 import com.glowrise.domain.enumerate.SITE;
 import com.glowrise.repository.BlogRepository;
 import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.UserDTO;
+import com.glowrise.service.exception.DuplicateEmailException;
+import com.glowrise.service.exception.DuplicateUsernameException;
+import com.glowrise.service.exception.InvalidTokenException;
 import com.glowrise.service.mapper.UserMapper;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,322 +30,324 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true) // 기본적으로 읽기 전용 트랜잭션 설정
 public class UserService {
-    private final Logger log = LoggerFactory.getLogger(UserService.class);
+
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private final UserRepository userRepository;
     private final BlogRepository blogRepository;
-    private final UserMapper userMapper;
+    // 상수 정의
+    private static final long ACCESS_TOKEN_VALIDITY_MS = 60 * 60 * 1000L; // 1시간
     private final PasswordEncoder passwordEncoder;
     private final JWTUtil jwtUtil;
+    private static final long REFRESH_TOKEN_VALIDITY_MS = 7 * 24 * 60 * 60 * 1000L; // 7일
+    private final UserMapper userMapper; // MapStruct 매퍼 주입
 
-    // 일반 회원가입
-    public UserDTO signUp(UserDTO dto) throws Exception {
-        validateDuplicateUsername(dto.getUsername());
-        validateDuplicateEmail(dto.getEmail());
+    /**
+     * 일반 회원가입
+     *
+     * @param dto 회원가입 정보 DTO
+     * @return 생성된 사용자 정보 DTO (비밀번호 제외)
+     */
+    @Transactional // 쓰기 작업
+    public UserDTO signUp(UserDTO dto) {
+        log.info("회원가입 서비스 시작 - Username: {}", dto.getUsername());
+        validateUserCreation(dto); // 중복 및 유효성 검사
 
-        User user = userMapper.toEntity(dto); // DTO → 엔티티 변환
-        user.setPassword(passwordEncoder.encode(dto.getPassword())); // 비밀번호 암호화
-        user.setRole(ROLE.ROLE_USER); // 기본 역할 설정
-        user.setSite(SITE.LOCAL); // 기본 사이트 설정
+        User user = userMapper.toEntity(dto); // DTO -> Entity 변환
+        user.setPassword(passwordEncoder.encode(dto.getPassword()));
+        user.setRole(ROLE.ROLE_USER);
+        user.setSite(SITE.LOCAL);
 
         User savedUser = userRepository.save(user);
-        UserDTO responseDto = userMapper.toDto(savedUser);
-        responseDto.setPassword(null); // 응답에서 비밀번호 제외
-        return responseDto;
+        log.info("회원가입 완료 - User ID: {}", savedUser.getId());
+        // 비밀번호 제외 DTO 반환 (UserMapper에 toDtoWithoutPassword 구현 가정)
+        return userMapper.toDtoWithoutPassword(savedUser);
     }
 
-    // 사용자 정보 조회
-    @Transactional(readOnly = true)
-    public UserDTO getUserProfile(String username) throws Exception{
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new Exception("사용자를 찾을 수 없습니다"));
-
-        UserDTO dto = userMapper.toDto(user);
-        dto.setPassword(null); // 응답에서 비밀번호 제외
-        return dto;
+    /**
+     * 사용자명으로 사용자 프로필 조회
+     *
+     * @param username 조회할 사용자명
+     * @return 사용자 정보 DTO (비밀번호 제외)
+     */
+    public UserDTO getUserProfile(String username) {
+        log.debug("사용자 프로필 조회 시도 - Username: {}", username);
+        User user = findUserByUsername(username);
+        // 비밀번호 제외 DTO 반환 (UserMapper에 toDtoWithoutPassword 구현 가정)
+        return userMapper.toDtoWithoutPassword(user);
     }
 
-    // 사용자 정보 수정
-    public UserDTO updateUserProfile(String username, UserDTO dto) throws Exception {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new Exception("사용자를 찾을 수 없습니다"));
+    /**
+     * 현재 인증된 사용자 정보 및 블로그 정보 조회
+     *
+     * @param authentication 현재 인증 정보
+     * @return 사용자 정보 DTO (비밀번호 제외, 블로그 정보 포함)
+     */
+    public UserDTO getCurrentUserWithBlogInfo(Authentication authentication) {
+        User user = findUserFromAuthentication(authentication);
+        log.debug("현재 사용자 정보 조회 완료 - User ID: {}", user.getId());
 
-        // 이메일 변경 시 중복 체크
-        if (dto.getEmail() != null && !user.getEmail().equals(dto.getEmail())) {
-            validateDuplicateEmail(dto.getEmail());
+        // 비밀번호 제외 DTO 반환 (UserMapper에 toDtoWithoutPassword 구현 가정)
+        UserDTO userDTO = userMapper.toDtoWithoutPassword(user);
+
+        // 블로그 정보 조회 및 DTO에 추가
+        blogRepository.findByUserId(user.getId()).ifPresent(blog -> {
+            userDTO.setBlogId(blog.getId());
+            userDTO.setBlogUrl(blog.getUrl());
+            log.debug("사용자 블로그 정보 추가 - Blog ID: {}", blog.getId());
+        });
+
+        return userDTO;
+    }
+
+
+    /**
+     * 현재 인증된 사용자 정보 수정 (닉네임, 비밀번호 등)
+     *
+     * @param authentication 현재 인증 정보
+     * @param dto            수정할 정보 DTO
+     * @return 업데이트된 사용자 정보 DTO (비밀번호 제외)
+     */
+    @Transactional // 쓰기 작업
+    public UserDTO updateUserProfile(Authentication authentication, UserDTO dto) {
+        log.info("현재 사용자 정보 수정 서비스 시작");
+        User user = findUserFromAuthentication(authentication); // 인증 정보로 사용자 조회
+        log.debug("수정 대상 사용자 확인 - User ID: {}", user.getId());
+
+        // 닉네임 변경 시 유효성 및 중복 검사
+        // dto에 nickName이 있고, 기존 값과 다를 때만 검증 및 업데이트 수행
+        if (StringUtils.hasText(dto.getNickName()) && !Objects.equals(user.getNickName(), dto.getNickName())) {
+            log.debug("닉네임 변경 시도: {} -> {}", user.getNickName(), dto.getNickName());
+            String trimmedNickname = validateAndTrimNickname(dto.getNickName(), user.getId()); // 검증 및 공백 제거
+            user.setNickName(trimmedNickname);
+            log.info("닉네임 변경 완료 - User ID: {}", user.getId());
         }
 
-        // 비밀번호 변경 (로컬 사용자만)
-        if (user.getSite() == SITE.LOCAL && dto.getPassword() != null && !dto.getPassword().isEmpty()) {
-            dto.setPassword(passwordEncoder.encode(dto.getPassword()));
+        // 비밀번호 변경 (로컬 사용자 & 비밀번호 입력 시)
+        if (user.getSite() == SITE.LOCAL && StringUtils.hasText(dto.getPassword())) {
+            log.debug("비밀번호 변경 시도 - User ID: {}", user.getId());
+            // 비밀번호 유효성 검사 로직 추가 (예: 길이, 복잡도)
+            // if (!isValidPassword(dto.getPassword())) {
+            //     throw new IllegalArgumentException("비밀번호 형식이 올바르지 않습니다.");
+            // }
+            user.setPassword(passwordEncoder.encode(dto.getPassword()));
+            log.info("비밀번호 변경 완료 - User ID: {}", user.getId());
         }
 
-        userMapper.partialUpdate(user, dto); // 부분 업데이트
+        // 이메일 변경 로직은 제외 (필요 시 추가)
 
-        User updatedUser = userRepository.save(user);
-        UserDTO responseDto = userMapper.toDto(updatedUser);
-        responseDto.setPassword(null); // 응답에서 비밀번호 제외
-        return responseDto;
+        // 다른 필드 업데이트 (필요한 경우 여기에 추가)
+        // 예: user.setSomeField(dto.getSomeField());
+
+        // @Transactional 에 의해 변경 감지되어 자동 저장됨 (save 호출 불필요)
+        log.info("사용자 정보 수정 완료 - User ID: {}", user.getId());
+        // 비밀번호 제외 DTO 반환 (UserMapper에 toDtoWithoutPassword 구현 가정)
+        return userMapper.toDtoWithoutPassword(user);
     }
 
-    // 부분 업데이트 (선택적)
+    /**
+     * ID 기반 사용자 부분 업데이트 (UserMapper의 partialUpdate 활용 예시)
+     * 사용 권장하지 않음 - /profile/me 엔드포인트 사용 권장
+     * 필요하다면 강력한 권한 검증 로직 추가 필요
+     */
+    @Transactional
     public Optional<UserDTO> partialUpdateUser(UserDTO dto) {
+        log.warn("ID 기반 부분 업데이트 시도 (사용주의) - User ID: {}", dto.getId());
         return userRepository.findById(dto.getId())
                 .map(existingUser -> {
+                    // 권한 검증 로직 필요! (예: 관리자 또는 본인)
+
+                    // MapStruct의 partialUpdate 활용 (null이 아닌 필드만 업데이트하도록 설정 필요)
                     userMapper.partialUpdate(existingUser, dto);
+
+                    // 비밀번호는 별도 처리
                     if (dto.getPassword() != null && !dto.getPassword().isEmpty() && existingUser.getSite() == SITE.LOCAL) {
+                        log.debug("부분 업데이트: 비밀번호 변경 시도 - User ID: {}", dto.getId());
                         existingUser.setPassword(passwordEncoder.encode(dto.getPassword()));
                     }
+                    // @Transactional이므로 save는 선택적
+                    // return userRepository.save(existingUser);
                     return existingUser;
                 })
-                .map(userRepository::save)
-                .map(user -> {
-                    UserDTO responseDto = userMapper.toDto(user);
-                    responseDto.setPassword(null);
-                    return responseDto;
-                });
+                .map(user -> userMapper.toDtoWithoutPassword(user)); // 비밀번호 제외 DTO 반환
     }
 
-    // 리프레시 토큰을 사용한 토큰 갱신
-    @Transactional
-    public Map<String, String> refreshToken(String refreshToken) throws Exception {
-        if (refreshToken == null || jwtUtil.isExpired(refreshToken)) {
-            throw new Exception("유효하지 않거나 만료된 리프레시 토큰입니다");
-        }
+
+    /**
+     * 리프레시 토큰을 사용한 토큰 갱신
+     *
+     * @param refreshToken 리프레시 토큰
+     * @return 새로 발급된 Access Token 및 Refresh Token 맵
+     */
+    @Transactional // 쓰기 작업 (토큰 업데이트)
+    public Map<String, String> refreshToken(String refreshToken) {
+        log.info("토큰 갱신 서비스 시작");
+
+        validateRefreshToken(refreshToken); // Null, 만료 검증
+        log.debug("리프레시 토큰 기본 유효성 통과");
 
         String username = jwtUtil.getUsername(refreshToken);
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new Exception("사용자를 찾을 수 없습니다"));
+        User user = findUserByUsername(username);
+        log.debug("토큰 사용자 조회 성공 - Username: {}", username);
 
         if (!refreshToken.equals(user.getRefreshToken())) {
-            throw new Exception("리프레시 토큰이 일치하지 않습니다");
+            log.warn("리프레시 토큰 불일치 - User ID: {}", user.getId());
+            throw new InvalidTokenException("리프레시 토큰이 일치하지 않습니다.");
         }
+        log.debug("저장된 리프레시 토큰 일치 확인");
 
-        // 새로운 토큰 생성
-        String newAccessToken = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name(), 60 * 60 * 1000L);
-        String newRefreshToken = jwtUtil.generateRefreshToken(user.getUsername(), 7 * 24 * 60 * 60 * 1000L);
+        String newAccessToken = jwtUtil.generateAccessToken(user.getId(), user.getUsername(), user.getRole().name(), ACCESS_TOKEN_VALIDITY_MS);
+        String newRefreshToken = jwtUtil.generateRefreshToken(user.getUsername(), REFRESH_TOKEN_VALIDITY_MS);
+        log.debug("새 토큰 생성 완료 - User ID: {}", user.getId());
 
-        // User 엔티티에 저장
-        user.setAccessToken(newAccessToken);
-        user.setRefreshToken(newRefreshToken);
-        userRepository.save(user);
+        // DB에 토큰 저장 정책에 따라 업데이트
+        user.setAccessToken(newAccessToken); // 필요시 업데이트
+        user.setRefreshToken(newRefreshToken); // 갱신된 리프레시 토큰 저장
+        // userRepository.save(user); // @Transactional이면 생략 가능
 
-        // 토큰 반환
+        log.info("새 토큰 정보 DB 업데이트 완료 (필요시) - User ID: {}", user.getId());
         Map<String, String> tokens = new HashMap<>();
         tokens.put("accessToken", newAccessToken);
-        tokens.put("refreshToken", newRefreshToken);
+        tokens.put("refreshToken", newRefreshToken); // 새 리프레시 토큰도 반환 (클라이언트에서 관리 시)
+        log.info("토큰 갱신 완료 - User ID: {}", user.getId());
         return tokens;
     }
 
-    // 중복 체크 메서드
-    private void validateDuplicateUsername(String username) throws  Exception {
-        if (userRepository.findByUsername(username).isPresent()) {
-            throw new Exception("이미 존재하는 사용자명입니다");
-        }
-    }
-
-    private void validateDuplicateEmail(String email) throws Exception{
-        if (userRepository.findByEmail(email).isPresent()) {
-            throw new Exception("이미 사용 중인 이메일입니다");
-        }
-    }
-
-    public Map<String, String> refreshToken(String refreshToken, HttpServletResponse response) {
-        System.out.println("Refresh request received, Refresh Token: " + (refreshToken != null ? "present" : "missing"));
-
-        // 리프레시 토큰이 없는 경우
-        if (refreshToken == null) {
-            throw new IllegalArgumentException("No refresh token provided");
-        }
-
-        try {
-            // 리프레시 토큰 만료 확인
-            if (jwtUtil.isExpired(refreshToken)) {
-                System.out.println("Refresh token expired");
-                throw new IllegalArgumentException("Refresh token expired");
-            }
-
-            // 사용자 정보 조회
-            String username = jwtUtil.getUsername(refreshToken);
-            User userEntity = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new IllegalStateException("User not found: " + username));
-
-            // 리프레시 토큰 일치 여부 확인
-            if (!userEntity.getRefreshToken().equals(refreshToken)) {
-                System.out.println("Refresh token mismatch");
-                throw new IllegalArgumentException("Invalid refresh token");
-            }
-
-            // 새 액세스 토큰 발급
-            String role = userEntity.getRole().name();
-            String newAccessToken = jwtUtil.generateAccessToken(userEntity.getId(), username, role, 60 * 60 * 1000L); // 1시간
-            userEntity.setAccessToken(newAccessToken);
-            userRepository.save(userEntity);
-
-            // 쿠키에 새 액세스 토큰 설정
-            response.addCookie(createCookie("Authorization", newAccessToken));
-            System.out.println("New access token issued: " + newAccessToken);
-
-            // 응답 데이터 준비
-            Map<String, String> result = new HashMap<>();
-            result.put("message", "Token refreshed");
-            result.put("accessToken", newAccessToken);
-            return result;
-
-        } catch (Exception e) {
-            System.out.println("Refresh token processing failed: " + e.getMessage());
-            throw new IllegalArgumentException("Invalid refresh token: " + e.getMessage());
-        }
-    }
-
-    private Cookie createCookie(String key, String value) {
-        Cookie cookie = new Cookie(key, value);
-        cookie.setMaxAge(60 * 60 * 24); // 24시간
-        cookie.setPath("/");
-        cookie.setHttpOnly(true);
-        return cookie;
-    }
-
-    public Map<String, Object> getCurrentUser(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증되지 않은 사용자입니다.");
-        }
-
-        String username = authentication.getName();
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + username));
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", user.getId());
-        response.put("username", user.getUsername());
-        return response;
-    }
-
-    public UserDTO getCurrentUser2(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new IllegalStateException("인증 정보가 없습니다.");
-        }
-
-        // details에서 userId 추출
-        Object details = authentication.getDetails();
-        Long userId;
-        if (details instanceof Map) {
-            Object id = ((Map<?, ?>) details).get("userId");
-            if (id instanceof Number) {
-                userId = ((Number) id).longValue();
-            } else {
-                throw new IllegalStateException("userId가 유효하지 않습니다.");
-            }
-        } else {
-            // 대안: username으로 DB 조회
-            String username = authentication.getName();
-            User user = userRepository.findByUsername(username)
-                    .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username));
-            userId = user.getId();
-        }
-
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
-        UserDTO userDTO = userMapper.toDto(user);
-        Blog blog = blogRepository.findByUserId(userId).orElse(null);
-        if (blog != null) {
-            userDTO.setBlogId(blog.getId());
-            userDTO.setBlogUrl(blog.getUrl());
-        }
-        return userDTO;
-    }
 
     /**
      * 현재 로그인된 사용자의 닉네임을 업데이트합니다.
      *
      * @param newNickname    변경할 새 닉네임
      * @param authentication 현재 인증 정보
-     * @throws UsernameNotFoundException 사용자를 찾을 수 없을 때
-     * @throws IllegalArgumentException  닉네임 유효성 검증 실패 시
      */
-    @Transactional
+    @Transactional // 쓰기 작업
     public void updateUserNickname(String newNickname, Authentication authentication) {
-        log.info("닉네임 변경 서비스 시작 - 요청된 닉네임: '{}'", newNickname);
+        log.info("닉네임 변경 서비스 시작 - 요청 닉네임: '{}'", newNickname);
+        User user = findUserFromAuthentication(authentication); // 인증 정보로 사용자 찾기
 
-        // 1. 입력값 기본 검증 (null 또는 공백)
-        // StringUtils.hasText()는 null, 빈 문자열, 공백만 있는 문자열 모두 false 반환
-        if (!StringUtils.hasText(newNickname)) {
-            log.warn("닉네임 변경 실패: 닉네임이 비어있거나 공백입니다.");
-            throw new IllegalArgumentException("닉네임은 비어 있을 수 없습니다.");
-        }
-        String trimmedNickname = newNickname.trim(); // 앞뒤 공백 제거 후 사용
-
-        // 2. 인증 정보에서 사용자 ID 추출
-        Long userId = getUserIdFromAuthentication(authentication); // 기존 헬퍼 메소드 사용
-        log.debug("사용자 ID 추출 완료: {}", userId);
-
-        // 3. 사용자 조회
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> {
-                    log.warn("닉네임 변경 실패: 사용자를 찾을 수 없습니다. ID: {}", userId);
-                    // UsernameNotFoundException 또는 커스텀 예외 사용 가능
-                    return new UsernameNotFoundException("사용자를 찾을 수 없습니다. ID: " + userId);
-                });
-
-        // 4. 닉네임 유효성 검증 (Business Logic Validation) - 이 메소드 내부에서 IllegalArgumentException 발생시킴
-        validateNickname(trimmedNickname, user.getId());
+        String trimmedNickname = validateAndTrimNickname(newNickname, user.getId()); // 유효성 검증
         log.debug("닉네임 유효성 검증 통과: {}", trimmedNickname);
 
-        // 5. 닉네임 업데이트 및 저장
-        user.setNickName(trimmedNickname);
-        // userRepository.save(user); // @Transactional 이므로 변경 감지로 자동 저장됨 (명시적 save도 무방)
-        log.info("사용자 ID {}의 닉네임이 '{}'(으)로 성공적으로 변경되었습니다.", userId, trimmedNickname);
+        user.setNickName(trimmedNickname); // 닉네임 업데이트
+        log.info("사용자 ID {}의 닉네임이 '{}'(으)로 성공적으로 변경되었습니다.", user.getId(), trimmedNickname);
     }
 
     /**
-     * Authentication 객체에서 사용자 ID를 추출하는 헬퍼 메소드.
-     * (이전 코드와 동일)
+     * 회원가입 시 사용자명, 이메일 중복 및 유효성 검사
+     *
+     * @param dto 검사할 사용자 DTO
      */
-    private Long getUserIdFromAuthentication(Authentication authentication) {
-        if (authentication == null) {
-            throw new IllegalStateException("인증 정보가 없습니다.");
+    private void validateUserCreation(UserDTO dto) {
+        if (!StringUtils.hasText(dto.getUsername())) {
+            throw new IllegalArgumentException("사용자명을 입력해주세요.");
         }
-        // 방법 1: Principal이 CustomOAuthUser 타입인 경우
-        if (authentication.getPrincipal() instanceof CustomOAuthUser userPrincipal) {
-            if (userPrincipal.getUserId() != null) {
-                return userPrincipal.getUserId();
-            }
+        if (!StringUtils.hasText(dto.getEmail())) {
+            throw new IllegalArgumentException("이메일을 입력해주세요.");
         }
-        // 방법 2: JWTFilter에서 details 맵에 userId를 넣은 경우
-        Object details = authentication.getDetails();
-        if (details instanceof Map) {
-            Object userIdObj = ((Map<?, ?>) details).get("userId");
-            if (userIdObj instanceof Long) return (Long) userIdObj;
-            if (userIdObj instanceof Integer) return ((Integer) userIdObj).longValue();
-            if (userIdObj instanceof String) try {
-                return Long.parseLong((String) userIdObj);
-            } catch (NumberFormatException e) { /* 무시 */ }
+        if (!StringUtils.hasText(dto.getPassword())) {
+            throw new IllegalArgumentException("비밀번호를 입력해주세요.");
         }
-        log.error("인증 정보에서 사용자 ID를 추출할 수 없습니다. Principal: {}, Details: {}", authentication.getPrincipal(), authentication.getDetails());
-        throw new IllegalStateException("인증 정보에서 사용자 ID를 추출할 수 없습니다.");
-    }
 
-    /**
-     * 닉네임 유효성을 검증하는 메소드 (예시).
-     * (이전 코드와 동일 - IllegalArgumentException 발생시킴)
-     */
-    private void validateNickname(String nickname, Long currentUserId) {
-        // 길이 검증
-        if (nickname.length() < 2 || nickname.length() > 15) {
-            throw new IllegalArgumentException("닉네임은 2자 이상 15자 이하로 입력해주세요.");
-        }
-        // 형식 검증 (예: 특수문자 제한)
-        if (!nickname.matches("^[a-zA-Z0-9가-힣_]+$")) {
-            throw new IllegalArgumentException("닉네임은 영문, 숫자, 한글, 밑줄(_)만 사용 가능합니다.");
-        }
-        // 중복 검증 (자기 자신 제외)
-        userRepository.findByNickName(nickname).ifPresent(user -> {
-            if (!Objects.equals(user.getId(), currentUserId)) {
-                throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
-            }
+        userRepository.findByUsername(dto.getUsername()).ifPresent(u -> {
+            log.warn("회원가입 실패: 중복된 사용자명 - {}", dto.getUsername());
+            throw new DuplicateUsernameException("이미 존재하는 사용자명입니다."); // 커스텀 예외 사용 권장
+        });
+        userRepository.findByEmail(dto.getEmail()).ifPresent(u -> {
+            log.warn("회원가입 실패: 중복된 이메일 - {}", dto.getEmail());
+            throw new DuplicateEmailException("이미 사용 중인 이메일입니다."); // 커스텀 예외 사용 권장
         });
     }
 
+    /**
+     * 닉네임 유효성 검증 및 공백 제거
+     *
+     * @param nickname      검증할 닉네임
+     * @param currentUserId 현재 사용자 ID (중복 검사 시 제외용)
+     * @return 공백 제거된 유효한 닉네임
+     */
+    private String validateAndTrimNickname(String nickname, Long currentUserId) {
+        if (!StringUtils.hasText(nickname)) {
+            log.warn("닉네임 유효성 검증 실패: 비어 있음 - User ID: {}", currentUserId);
+            throw new IllegalArgumentException("닉네임은 비어 있을 수 없습니다.");
+        }
+        String trimmedNickname = nickname.trim();
 
+        // 길이 검증
+        if (trimmedNickname.length() < 2 || trimmedNickname.length() > 15) {
+            log.warn("닉네임 유효성 검증 실패: 길이 오류 ({}) - User ID: {}", trimmedNickname.length(), currentUserId);
+            throw new IllegalArgumentException("닉네임은 2자 이상 15자 이하로 입력해주세요.");
+        }
+        // 형식 검증 (예: 영문, 숫자, 한글, 밑줄)
+        if (!trimmedNickname.matches("^[a-zA-Z0-9가-힣_]+$")) {
+            log.warn("닉네임 유효성 검증 실패: 형식 오류 ('{}') - User ID: {}", trimmedNickname, currentUserId);
+            throw new IllegalArgumentException("닉네임은 영문, 숫자, 한글, 밑줄(_)만 사용 가능합니다.");
+        }
+        // 중복 검증 (자기 자신 제외)
+        userRepository.findByNickName(trimmedNickname).ifPresent(user -> {
+            if (!Objects.equals(user.getId(), currentUserId)) {
+                log.warn("닉네임 유효성 검증 실패: 중복 ('{}') - User ID: {}", trimmedNickname, currentUserId);
+                throw new IllegalArgumentException("이미 사용 중인 닉네임입니다."); // DuplicateNicknameException 권장
+            }
+        });
+        return trimmedNickname;
+    }
 
+    /**
+     * Refresh Token 유효성 검증 (Null 또는 만료)
+     *
+     * @param refreshToken 검증할 리프레시 토큰
+     */
+    private void validateRefreshToken(String refreshToken) {
+        if (!StringUtils.hasText(refreshToken)) {
+            log.warn("리프레시 토큰 유효성 검증 실패: 토큰 없음");
+            throw new InvalidTokenException("리프레시 토큰이 제공되지 않았습니다."); // 커스텀 예외 사용 권장
+        }
+        try {
+            if (jwtUtil.isExpired(refreshToken)) {
+                log.warn("리프레시 토큰 유효성 검증 실패: 만료됨");
+                throw new InvalidTokenException("리프레시 토큰이 만료되었습니다.");
+            }
+        } catch (Exception e) { // jwtUtil.isExpired 에서 발생할 수 있는 모든 예외 처리
+            log.error("리프레시 토큰 검증 중 오류 발생", e);
+            throw new InvalidTokenException("리프레시 토큰 검증 중 오류가 발생했습니다: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 사용자명으로 User 엔티티 조회 (찾지 못하면 예외 발생)
+     *
+     * @param username 조회할 사용자명
+     * @return User 엔티티
+     */
+    private User findUserByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.warn("사용자 조회 실패: 사용자명을 찾을 수 없음 - {}", username);
+                    return new UsernameNotFoundException("사용자를 찾을 수 없습니다: " + username);
+                });
+    }
+
+    /**
+     * Authentication 객체에서 User 엔티티 조회
+     *
+     * @param authentication 인증 정보
+     * @return User 엔티티
+     */
+    private User findUserFromAuthentication(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            log.warn("인증 정보 없음 또는 인증되지 않음");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "인증되지 않은 사용자입니다.");
+        }
+
+        // Authentication 이름(일반적으로 username) 사용
+        String username = authentication.getName();
+        if (username == null) {
+            log.error("Authentication에서 username을 추출할 수 없습니다. Principal: {}", authentication.getPrincipal());
+            throw new IllegalStateException("인증 정보에서 사용자 이름을 찾을 수 없습니다.");
+        }
+        log.debug("Authentication에서 사용자명 추출: {}", username);
+        // 추출된 username으로 DB에서 User 조회
+        return findUserByUsername(username);
+    }
 }

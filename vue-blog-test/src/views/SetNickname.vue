@@ -30,19 +30,45 @@
 </template>
 
 <script>
-import authService from '@/services/authService';
+import {mapActions, mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
+import authService from '@/services/authService'; // API 호출용 서비스 import
 
 export default {
   name: 'SetNickname',
   data() {
     return {
-      nickname: '',
-      inputError: '',
-      serverError: '',
-      isSubmitting: false,
+      nickname: '',          // 입력된 닉네임
+      inputError: '',      // 입력 유효성 에러 메시지
+      serverError: '',     // 서버 응답 에러 메시지
+      isSubmitting: false, // 제출 중 상태
     };
   },
+  computed: {
+    // --- Vuex Getters 매핑 ---
+    ...mapGetters(['isLoggedIn', 'nickName', 'isLoadingUser']), // 로그인 상태, 닉네임, 스토어 로딩 상태
+    // ------------------------
+  },
+  watch: {
+    // 스토어 로딩 완료 및 닉네임 상태 변경 감지
+    isLoadingUser(loading) {
+      if (!loading && this.isLoggedIn && this.nickName) {
+        console.log("SetNickname Watcher: 스토어 로드 완료, 닉네임 존재 확인 -> 홈으로 이동");
+        this.redirectToHomeIfNicknameExists();
+      }
+    },
+    nickName(newNickname) {
+      if (this.isLoggedIn && newNickname) {
+        console.log("SetNickname Watcher: 스토어 닉네임 변경됨 -> 홈으로 이동");
+        this.redirectToHomeIfNicknameExists();
+      }
+    }
+  },
   methods: {
+    // --- Vuex Actions 매핑 ---
+    ...mapActions(['fetchCurrentUser']), // 사용자 정보 갱신용 액션
+    // ------------------------
+
+    // 입력값 유효성 검사 (기존과 동일)
     validateInput() {
       this.inputError = '';
       if (!this.nickname) {
@@ -60,25 +86,35 @@ export default {
       }
       return true;
     },
+
+    // 닉네임 제출
     async submitNickname() {
       this.serverError = '';
+      // 입력 유효성 검사
       if (!this.validateInput()) {
         return;
       }
 
       this.isSubmitting = true;
       try {
+        // authService 통해 닉네임 업데이트 API 호출 (변경 없음)
         await authService.updateUserNickname(this.nickname);
         alert('닉네임이 성공적으로 설정되었습니다.');
-        // 로컬 스토리지 사용자 정보도 업데이트 되었으므로 바로 이동
-        this.$router.push('/'); // 설정 후 홈으로 이동
+
+        // --- Vuex: 성공 후 스토어 상태 갱신 ---
+        // fetchCurrentUser 액션을 호출하여 최신 사용자 정보(닉네임 포함)를 스토어에 반영
+        await this.fetchCurrentUser();
+        console.log("SetNickname: 스토어 사용자 정보 갱신 완료.");
+        // ---------------------------------
+
+        // 스토어 갱신 후 홈으로 이동
+        this.$router.push('/');
+
       } catch (error) {
         console.error('닉네임 설정 오류:', error);
-        if (error.response && error.response.data && error.response.data.message) {
-          // 백엔드에서 구체적인 에러 메시지를 보낸 경우 (예: 중복 닉네임)
+        // 에러 메시지 처리 (기존과 동일)
+        if (error.response?.data?.message) {
           this.serverError = error.response.data.message;
-        } else if (error.message) {
-          this.serverError = error.message;
         } else {
           this.serverError = '닉네임 설정 중 오류가 발생했습니다. 다시 시도해주세요.';
         }
@@ -86,14 +122,31 @@ export default {
         this.isSubmitting = false;
       }
     },
+
+    // 닉네임 존재 시 홈으로 리디렉션하는 함수
+    redirectToHomeIfNicknameExists() {
+      // 로그인 상태이고 닉네임이 존재하면 홈으로 replace
+      // replace를 사용하여 뒤로가기로 이 페이지에 다시 접근하는 것을 방지
+      if (this.isLoggedIn && this.nickName) {
+        console.log("SetNickname: 이미 닉네임이 설정되어 홈으로 이동합니다.");
+        this.$router.replace('/');
+      }
+    }
   },
   mounted() {
-    // 페이지 진입 시 현재 닉네임이 이미 있는지 확인하고 리다이렉트 로직 추가 가능
-    const user = authService.getStoredUser();
-    if (user && user.nickName) {
-      console.log("이미 닉네임이 설정되어 있습니다. 홈으로 이동합니다.");
-      this.$router.replace('/'); // 사용자가 뒤로가기로 이 페이지 다시 못 오게 replace 사용
+    // --- Vuex: 마운트 시 스토어 상태 확인 ---
+    // 스토어가 아직 로딩 중일 수 있으므로, 로딩 완료 후 또는 즉시 확인
+    console.log("SetNickname: mounted hook. 스토어 닉네임 확인 시도.");
+    // 스토어가 로딩 중이 아니고, 로그인 상태이며, 닉네임이 이미 있다면 리디렉션
+    if (!this.isLoadingUser && this.isLoggedIn && this.nickName) {
+      this.redirectToHomeIfNicknameExists();
+    } else if (!this.isLoggedIn && !this.isLoadingUser) {
+      // 로그인이 안 된 상태로 이 페이지에 접근했다면 홈으로 보냄
+      console.log("SetNickname: 로그인되지 않은 상태입니다. 홈으로 이동합니다.");
+      this.$router.replace('/');
     }
+    // 스토어가 로딩 중이라면 watch에서 처리될 때까지 기다림
+    // -----------------------------------
   }
 };
 </script>

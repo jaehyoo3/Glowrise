@@ -3,6 +3,10 @@ spring:
     redis:
       host: localhost
       port: 6379
+  servlet:
+    multipart:
+      max-file-size: 10MB   # 개별 파일 최대 크기 (예: 10MB)
+      max-request-size: 100MB  # 전체 요청 최대 크기 (예: 100MB)
   kafka:
     bootstrap-servers: localhost:9092
     producer:

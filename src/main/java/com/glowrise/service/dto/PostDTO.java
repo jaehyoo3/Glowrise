@@ -23,6 +23,8 @@ public class PostDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long fileCount;
+    private List<Long> inlineImageFileIds;
+
 
     public PostDTO(Long id, String title, String content, Long menuId, Long userId,
                    Long viewCount, LocalDateTime createdAt, LocalDateTime updatedAt, Long fileCount) {

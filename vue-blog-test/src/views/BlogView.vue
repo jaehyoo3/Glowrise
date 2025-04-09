@@ -1,6 +1,5 @@
 <template>
   <div class="blog-view">
-    <NavBar />
     <div class="container">
       <div v-if="isLoading" class="loading-state">
         <span>로딩 중...</span>
@@ -154,56 +153,43 @@
 </template>
 
 <script>
-import {reactive} from 'vue';
-import NavBar from '@/components/NavBar.vue';
-import authService from '@/services/authService';
+import {reactive} from 'vue'; // setup 부분 유지
+import {mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
+import authService from '@/services/authService'; // API 호출용 서비스 import
 
 export default {
   name: 'BlogView',
-  components: { NavBar },
   props: {
-    blogUrl: String,
-    menuId: String,
+    blogUrl: String, // 라우터 prop
+    menuId: String,  // 라우터 prop (선택적)
   },
+  // setup()은 reactive posts 선언을 위해 그대로 둡니다.
   setup() {
     const posts = reactive({content: [], totalPages: 0});
     return {posts};
   },
   data() {
     return {
-      blog: null,
-      menus: [],
-      isLoading: true,
-      isOwner: false,
-      selectedMenu: null,
-      currentMenuId: null,
-      currentUser: null,
-      selectedPosts: [],
-      currentPage: 0,
-      currentPageInput: 1,
-      pageSize: 20,
-      searchKeyword: '',
+      blog: null,      // 현재 보고 있는 블로그 정보
+      menus: [],       // 현재 블로그의 메뉴 목록
+      isLoading: true, // 블로그/메뉴 로딩 상태
+      isOwner: false,  // 현재 로그인 사용자가 블로그 소유주인지 여부
+      selectedMenu: null, // 현재 선택된 메뉴 객체
+      currentMenuId: null, // 현재 URL의 메뉴 ID
+      // --- 삭제: currentUser 로컬 상태 제거 ---
+      selectedPosts: [], // 선택된 게시글 ID 목록 (삭제용)
+      currentPage: 0,    // 현재 게시글 페이지 (0부터 시작)
+      currentPageInput: 1, // 페이지 입력 필드용 (1부터 시작)
+      pageSize: 10,      // 페이지 당 게시글 수 (기존 20에서 줄임, 필요시 조정)
+      searchKeyword: '', // 검색어
     };
   },
-  async created() {
-    this.currentMenuId = this.menuId || this.$route.params.menuId;
-    await this.loadBlogAndMenus();
-    await this.loadPosts();
-    this.currentPageInput = this.currentPage + 1;
-  },
-  watch: {
-    '$route.params.menuId'(newMenuId) {
-      this.currentMenuId = newMenuId;
-      this.currentPage = 0;
-      this.currentPageInput = 1;
-      this.searchKeyword = '';
-      this.loadPosts();
-    },
-    currentPage(newPage) {
-      this.currentPageInput = newPage + 1;
-    },
-  },
   computed: {
+    // --- Vuex Getters 매핑 ---
+    ...mapGetters(['isLoggedIn', 'userId']), // 로그인 상태 및 사용자 ID
+    // ------------------------
+
+    // 메뉴 계산 속성 (기존과 동일)
     rootMenus() {
       return this.getRootMenus();
     },
@@ -212,40 +198,112 @@ export default {
       return this.menus.some(menu => menu.parentId === this.selectedMenu.id);
     },
   },
+  watch: {
+    // 라우트의 menuId 변경 감지 (기존과 동일)
+    '$route.params.menuId'(newMenuId) {
+      this.currentMenuId = newMenuId;
+      this.currentPage = 0;
+      this.currentPageInput = 1;
+      this.searchKeyword = ''; // 메뉴 변경 시 검색어 초기화
+      this.loadPosts(); // 게시글 다시 로드
+    },
+    // 페이지 번호 변경 감지 (기존과 동일)
+    currentPage(newPage) {
+      this.currentPageInput = newPage + 1;
+    },
+    // --- Vuex: 로그인 상태 변경 감지 (선택적) ---
+    // 로그인 상태가 변경되면 isOwner를 다시 계산해야 할 수 있음
+    isLoggedIn() {
+      this.updateOwnership();
+    }
+    // -----------------------------------------
+  },
+  async created() {
+    console.log('BlogView: created hook');
+    // 라우터 파라미터에서 초기 메뉴 ID 설정
+    this.currentMenuId = this.menuId || this.$route.params.menuId;
+    // 블로그 및 메뉴 정보 로드 (내부에서 소유권 확인 로직 호출)
+    await this.loadBlogAndMenus();
+    // 게시글 로드 (블로그 로딩 성공 시에만)
+    if (this.blog) {
+      await this.loadPosts();
+    }
+    // 페이지 입력 필드 초기화
+    this.currentPageInput = this.currentPage + 1;
+  },
   methods: {
     async loadBlogAndMenus() {
+      console.log('BlogView: loadBlogAndMenus 시작');
+      this.isLoading = true;
       try {
-        this.isLoading = true;
+        // 라우터 prop 또는 파라미터에서 블로그 URL 가져오기
         const blogUrl = this.blogUrl || this.$route.params.blogUrl;
+        if (!blogUrl) throw new Error("Blog URL not found in route.");
+
+        // authService를 통해 특정 블로그 정보 가져오기 (변경 없음)
+        console.log(`BlogView: 블로그 정보 로드 중 (URL: ${blogUrl})`);
         const blog = await authService.getBlogByUrl(blogUrl);
-        this.blog = blog;
-        if (blog) {
+        this.blog = blog; // 컴포넌트 상태에 저장
+
+        if (blog && blog.id) {
+          console.log(`BlogView: 블로그 로드 성공 (ID: ${blog.id}), 메뉴 로드 시작`);
+          // authService를 통해 메뉴 정보 가져오기 (변경 없음)
           this.menus = await authService.getMenusByBlogId(blog.id);
+          console.log(`BlogView: 메뉴 로드 완료 (${this.menus.length}개)`);
+
+          // 현재 라우트의 메뉴 ID로 selectedMenu 설정 (변경 없음)
           const routeMenuId = this.currentMenuId || this.$route.params.menuId;
           if (routeMenuId) {
             this.selectedMenu = this.menus.find(menu => menu.id === Number(routeMenuId));
           }
-          // 비회원도 접근 가능하도록 getCurrentUser 호출을 조건부로 처리
-          const storedUser = authService.getStoredUser();
-          if (storedUser) {
-            this.currentUser = await authService.getCurrentUser();
-            this.isOwner = blog.userId !== null && this.currentUser?.id === blog.userId;
-          } else {
-            this.currentUser = null;
-            this.isOwner = false;
-          }
+
+          // --- Vuex: 소유권 확인 로직 변경 ---
+          this.updateOwnership(); // 별도 함수로 분리
+          // ---------------------------------
+
+        } else {
+          // blog 정보가 제대로 오지 않은 경우 (null 또는 id 없음)
+          console.warn("BlogView: 유효하지 않은 블로그 데이터 수신");
+          this.blog = null;
+          this.menus = [];
+          this.$router.replace('/404'); // 404 페이지로 이동
         }
       } catch (error) {
-        if (error.response?.status === 404) {
-          this.$router.push('/404');
+        console.error('BlogView: 블로그 또는 메뉴 로딩 실패:', error);
+        if (error.response?.status === 404 || error.message.includes("Blog URL not found")) {
+          this.$router.replace('/404'); // 404 에러 시 404 페이지로
         } else {
-          this.blog = null; // 비회원일 경우에도 블로그가 없으면 null로 설정
+          // 기타 에러 처리 (예: 에러 메시지 표시)
+          this.blog = null;
+          this.menus = [];
         }
       } finally {
         this.isLoading = false;
+        console.log('BlogView: loadBlogAndMenus 종료');
       }
     },
+
+    // --- Vuex: 소유권 확인 로직 분리 ---
+    updateOwnership() {
+      if (this.blog && this.blog.userId && this.isLoggedIn && this.userId) {
+        this.isOwner = this.blog.userId === this.userId;
+        console.log(`BlogView: 소유권 확인 완료. isOwner: ${this.isOwner}`);
+      } else {
+        this.isOwner = false;
+        console.log(`BlogView: 소유권 확인 - 비로그인 또는 정보 부족. isOwner: false`);
+      }
+    },
+    // ----------------------------------
+
     async loadPosts() {
+      // 게시글 로딩 로직
+      if (!this.blog || !this.blog.id) {
+        console.log("BlogView: 블로그 정보가 없어 게시글을 로드할 수 없음");
+        this.posts.content = [];
+        this.posts.totalPages = 0;
+        return;
+      }
+      console.log(`BlogView: 게시글 로드 시작 (Menu ID: ${this.currentMenuId || '전체'}, Page: ${this.currentPage})`);
       try {
         const routeMenuId = this.currentMenuId || this.$route.params.menuId;
         const params = {
@@ -259,55 +317,84 @@ export default {
             routeMenuId || null,
             params
         );
+
+        // selectedMenu 업데이트
         if (routeMenuId) {
           this.selectedMenu = this.menus.find(menu => menu.id === Number(routeMenuId));
         } else {
           this.selectedMenu = null;
         }
-        this.posts.content = postsData.content || [];
-        this.posts.totalPages = postsData.totalPages || 0;
+
+        // --- 수정: API 응답 구조에 맞춰 totalPages 접근 ---
+        // postsData.page 객체가 존재하고 그 안에 totalPages가 있는지 확인
+        this.posts.totalPages = postsData?.page?.totalPages || 0;
+        // -----------------------------------------------
+
+        // --- 확인: 게시글 내용 접근 경로 확인 ---
+        // API 응답 구조에 따라 content 접근 경로가 다를 수 있음
+        // 예시 1: 최상위 content 배열
+        this.posts.content = postsData?.content || [];
+        // 예시 2: Spring Data REST HAL (_embedded) 구조
+        // this.posts.content = postsData?._embedded?.posts || [];
+        // 실제 API 응답 전체 구조를 확인하고 위 경로 중 맞는 것을 사용하세요.
+        // --------------------------------------
+
+        console.log(`BlogView: 게시글 로드 완료 (${this.posts.content.length}개), TotalPages: ${this.posts.totalPages}`);
+
       } catch (error) {
+        console.error("BlogView: 게시글 로딩 실패:", error);
         this.posts.content = [];
         this.posts.totalPages = 0;
       }
     },
     searchPosts() {
+      // 검색 로직 (기존과 동일)
       this.currentPage = 0;
       this.currentPageInput = 1;
-      this.selectedPosts = [];
+      this.selectedPosts = []; // 검색 시 선택 초기화
       this.loadPosts();
     },
     changePage(newPage) {
+      // 페이지 변경 로직 (기존과 동일)
       if (newPage >= 0 && newPage < this.posts.totalPages) {
         this.currentPage = newPage;
-        this.selectedPosts = [];
+        this.selectedPosts = []; // 페이지 변경 시 선택 초기화
         this.loadPosts();
       }
     },
     updatePage() {
+      // 페이지 입력 필드로 변경 로직 (기존과 동일)
       const newPage = this.currentPageInput - 1;
       if (newPage >= 0 && newPage < this.posts.totalPages) {
         this.changePage(newPage);
       } else {
-        this.currentPageInput = this.currentPage + 1;
-        alert(`페이지 번호는 1에서 ${this.posts.totalPages} 사이여야 합니다.`);
+        this.currentPageInput = this.currentPage + 1; // 잘못된 입력 시 현재 페이지로 복원
+        if (this.posts.totalPages > 0) {
+          alert(`페이지 번호는 1에서 ${this.posts.totalPages} 사이여야 합니다.`);
+        } else {
+          alert('게시글이 없습니다.');
+        }
       }
     },
     changePageSize() {
+      // 페이지 크기 변경 로직 (기존과 동일)
       this.currentPage = 0;
       this.currentPageInput = 1;
       this.selectedPosts = [];
       this.loadPosts();
     },
     toggleSelectAll() {
+      // 전체 선택 토글 (기존과 동일)
       if (this.selectedPosts.length === this.posts.content.length) {
         this.selectedPosts = [];
       } else {
+        // 현재 페이지의 모든 post id 선택
         this.selectedPosts = this.posts.content.map(post => post.id);
       }
     },
     async bulkDeletePosts() {
-      if (!this.isOwner) {
+      // 게시글 삭제 로직 (isOwner 및 userId를 스토어 getter 사용)
+      if (!this.isOwner) { // isOwner computed 속성 사용
         alert('게시글을 삭제할 권한이 없습니다.');
         return;
       }
@@ -317,48 +404,96 @@ export default {
       }
       if (!confirm(`선택된 ${this.selectedPosts.length}개의 게시글을 정말 삭제하시겠습니까?`)) return;
 
+      // --- Vuex: userId getter 사용 ---
+      const currentUserId = this.userId;
+      if (!currentUserId) {
+        alert('사용자 정보를 확인할 수 없습니다.');
+        return;
+      }
+      // -----------------------------
+
       try {
+        // Promise.all 사용하여 병렬 삭제 (기존과 동일)
         await Promise.all(
             this.selectedPosts.map(postId =>
-                authService.deletePost(postId, this.currentUser.id)
+                authService.deletePost(postId, currentUserId) // 스토어에서 가져온 userId 사용
             )
         );
+        // 삭제 성공 후 목록에서 제거 (기존과 동일)
         this.posts.content = this.posts.content.filter(post => !this.selectedPosts.includes(post.id));
-        this.selectedPosts = [];
+        this.selectedPosts = []; // 선택 해제
         alert('선택된 게시글이 삭제되었습니다.');
+        // 필요하다면 loadPosts() 다시 호출하여 페이지네이션 등 재계산
+        // await this.loadPosts();
       } catch (error) {
         alert('게시글 삭제 실패: ' + (error.response?.data?.message || error.message));
       }
     },
     formatDate(dateString) {
+      // 입력값이 없으면 '날짜 없음' 반환
       if (!dateString) return '날짜 없음';
-      const date = new Date(dateString);
-      const now = new Date();
-      const isToday = date.toDateString() === now.toDateString();
-      const isThisYear = date.getFullYear() === now.getFullYear();
 
-      if (isToday) {
-        return date.toLocaleTimeString('ko-KR', {hour: '2-digit', minute: '2-digit', hour12: false});
+      try {
+        // 입력 문자열로 Date 객체 생성
+        const date = new Date(dateString);
+
+        // 유효하지 않은 날짜 객체인지 확인
+        if (isNaN(date.getTime())) {
+          console.warn("formatDate: 유효하지 않은 날짜 문자열:", dateString);
+          return '날짜 오류';
+        }
+
+        const now = new Date(); // 현재 시간
+        const diffSeconds = Math.floor((now - date) / 1000); // 현재 시간과의 차이 (초)
+
+        // 시간 차이에 따른 상대 시간 표시
+        if (diffSeconds < 60) { // 1분 미만
+          return '방금 전';
+        }
+        const diffMinutes = Math.floor(diffSeconds / 60); // 분 단위 차이
+        if (diffMinutes < 60) { // 1시간 미만
+          return `${diffMinutes}분 전`;
+        }
+        const diffHours = Math.floor(diffMinutes / 60); // 시간 단위 차이
+        if (diffHours < 24) { // 24시간 미만
+          return `${diffHours}시간 전`;
+        }
+
+        // 하루 이상 차이 나는 경우
+        const diffDays = Math.floor(diffHours / 24); // 일 단위 차이
+        if (diffDays === 1) { // 하루 차이
+          return '어제';
+        }
+        if (diffDays < 7) { // 7일 미만
+          return `${diffDays}일 전`;
+        }
+
+        // 7일 이상 차이 나는 경우 'YYYY.MM.DD' 형식으로 표시
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0'); // 월 (0부터 시작하므로 +1), 2자리로 포맷
+        const day = String(date.getDate()).padStart(2, '0');     // 일 (2자리로 포맷)
+        return `${year}.${month}.${day}`;
+
+      } catch (e) {
+        // Date 객체 생성 또는 계산 중 에러 발생 시
+        console.error("formatDate 처리 중 오류:", dateString, e);
+        return '날짜 형식 오류';
       }
-      const padZero = (num) => String(num).padStart(2, '0');
-      const year = date.getFullYear();
-      const month = padZero(date.getMonth() + 1);
-      const day = padZero(date.getDate());
-
-      if (isThisYear) return `${month}.${day}`;
-      return `${year}.${month}.${day}`;
     },
     getRootMenus() {
+      // 루트 메뉴 필터링 (기존과 동일)
       if (!Array.isArray(this.menus)) return [];
-      return this.menus.filter(menu => !menu.parentId);
+      return this.menus.filter(menu => !menu.parentId).sort((a, b) => a.orderIndex - b.orderIndex); // 순서 정렬 추가
     },
     getSubMenus(parentId) {
+      // 서브 메뉴 필터링 (기존과 동일)
       if (!Array.isArray(this.menus)) return [];
-      return this.menus.filter(menu => menu.parentId === parentId);
+      return this.menus.filter(menu => menu.parentId === parentId).sort((a, b) => a.orderIndex - b.orderIndex); // 순서 정렬 추가
     },
   },
 };
 </script>
+
 <style scoped>
 .blog-view {
   background-color: #f8f9fa;
