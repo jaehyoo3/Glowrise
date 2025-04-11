@@ -1,28 +1,32 @@
 package com.glowrise.service;
 
-import com.glowrise.domain.*;
+import com.glowrise.domain.Menu;
+import com.glowrise.domain.Post;
+import com.glowrise.domain.StoredFile;
+import com.glowrise.domain.User;
 import com.glowrise.domain.enumerate.TimePeriod;
 import com.glowrise.repository.FileRepository;
 import com.glowrise.repository.MenuRepository;
 import com.glowrise.repository.PostRepository;
-import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.FileDTO;
 import com.glowrise.service.dto.IdCountDTO;
 import com.glowrise.service.dto.PostDTO;
 import com.glowrise.service.mapper.PostMapper;
 import com.glowrise.service.util.QueryDslPagingUtil;
+import com.glowrise.service.util.SecurityUtil;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.JPQLQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.owasp.html.PolicyFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,30 +44,29 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class PostService {
 
     private static final int VIEW_COUNT_TTL_SECONDS = 300;
+    private static final String VIEW_COUNT_KEY_PREFIX_USER = "view:post:%d:user:%d:ip:%s";
+    private static final String VIEW_COUNT_KEY_PREFIX_ANONYMOUS = "view:post:%d:ip:%s";
+
     private final MenuRepository menuRepository;
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil;
     private final PolicyFactory htmlPolicyFactory;
     private final FileRepository fileRepository;
     private final FileService fileService;
-    private static final String VIEW_COUNT_KEY_PREFIX_USER = "view:post:%d:user:%d:ip:%s";
     private final QueryDslPagingUtil pagingUtil;
     private final JPAQueryFactory queryFactory;
-    private static final String VIEW_COUNT_KEY_PREFIX_ANONYMOUS = "view:post:%d:ip:%s";
     private final PostRepository postRepository;
     private final PostMapper postMapper;
     private final RedisTemplate<String, String> redisTemplate;
 
     @Transactional
-    public PostDTO createPost(PostDTO dto, List<MultipartFile> files, Authentication authentication) throws IOException {
-        Long currentUserId = getCurrentUserId(authentication);
-        User author = findUserByIdOrThrow(currentUserId);
+    @PreAuthorize("@authorizationService.isBlogOwnerByMenuId(#dto.menuId)")
+    public PostDTO createPost(PostDTO dto, List<MultipartFile> files, Authentication ignoredAuthentication) throws IOException {
+        User author = securityUtil.getCurrentUserOrThrow();
         Menu menu = findMenuByIdOrThrow(dto.getMenuId());
-        checkBlogOwnership(menu, currentUserId);
 
         Post post = postMapper.toEntity(dto);
 
@@ -76,48 +79,35 @@ public class PostService {
         post.setViewCount(0L);
 
         Post savedPost = postRepository.save(post);
-        log.info("Post 저장됨: ID {}", savedPost.getId());
 
         handleFileUploads(files, savedPost);
 
         List<Long> inlineIds = dto.getInlineImageFileIds();
         if (inlineIds != null && !inlineIds.isEmpty()) {
-            log.info("Post {} 에 인라인 이미지 {}개 연결 시도.", savedPost.getId(), inlineIds.size());
             List<StoredFile> inlineFilesToUpdate = fileRepository.findAllById(inlineIds);
-            log.debug("조회된 StoredFile 엔티티 수: {}", inlineFilesToUpdate.size());
-
             for (StoredFile inlineFile : inlineFilesToUpdate) {
                 if (inlineFile.getPost() == null) {
                     inlineFile.setPost(savedPost);
                     fileRepository.save(inlineFile);
-                    log.debug("StoredFile ID {} 에 Post ID {} 연결됨", inlineFile.getId(), savedPost.getId());
-                } else {
-                    log.warn("StoredFile ID {} 는 이미 Post ID {} 에 연결되어 있어 스킵합니다.", inlineFile.getId(), inlineFile.getPost().getId());
                 }
             }
         }
 
         PostDTO resultDto = postMapper.toDto(savedPost);
-
         List<FileDTO> attachedFileDtos = fileService.getFilesByPostId(savedPost.getId());
-        resultDto.setFileIds(attachedFileDtos.stream()
-                .map(FileDTO::getId)
-                .collect(Collectors.toList()));
-
+        resultDto.setFileIds(attachedFileDtos.stream().map(FileDTO::getId).collect(Collectors.toList()));
         resultDto.setCommentCount(0L);
         int inlineImageCount = (inlineIds != null) ? inlineIds.size() : 0;
         resultDto.setFileCount((long) attachedFileDtos.size() + inlineImageCount);
 
-        log.info("Post 생성 완료 및 DTO 반환: ID {}", savedPost.getId());
         return resultDto;
     }
 
     @Transactional
-    public PostDTO updatePost(Long postId, PostDTO dto, List<MultipartFile> files, Authentication authentication) throws IOException {
-        Long currentUserId = getCurrentUserId(authentication);
+    @PreAuthorize("@authorizationService.isPostOwner(#postId)")
+    public PostDTO updatePost(Long postId, PostDTO dto, List<MultipartFile> files, Authentication ignoredAuthentication) throws IOException {
+        Long currentUserId = securityUtil.getCurrentUserIdOrThrow(); // Needed for handleMenuUpdate check
         Post post = findPostByIdOrThrow(postId);
-
-        checkPostOwnership(post, currentUserId);
 
         handleMenuUpdate(dto.getMenuId(), post, currentUserId);
 
@@ -143,22 +133,16 @@ public class PostService {
     }
 
     @Transactional
-    public void deletePost(Long postId, Authentication authentication) {
-        Long currentUserId = getCurrentUserId(authentication);
+    @PreAuthorize("@authorizationService.isPostOwner(#postId)")
+    public void deletePost(Long postId, Authentication ignoredAuthentication) {
         Post post = findPostByIdOrThrow(postId);
-
-        checkPostOwnership(post, currentUserId);
-
         fileService.deleteFilesByPostId(postId);
-
         postRepository.delete(post);
     }
 
     @Transactional(readOnly = true)
     public PostDTO getPostById(Long postId, String clientIp, Authentication authentication) {
         Post post = findPostByIdOrThrow(postId);
-
-        log.info("test {}", clientIp);
         tryIncrementViewCount(post, clientIp, authentication);
 
         PostDTO postDTO = postMapper.toDto(post);
@@ -183,7 +167,7 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public List<PostDTO> getPostsByUserId(Long userId) {
-        findUserByIdOrThrow(userId);
+        securityUtil.findUserByIdOrThrow(userId);
         return postRepository.findByAuthorId(userId).stream()
                 .map(postMapper::toDto)
                 .collect(Collectors.toList());
@@ -222,31 +206,21 @@ public class PostService {
         if (posts.isEmpty()) {
             return Page.empty(pageable);
         }
-        List<Long> postIds = posts.stream()
-                .map(Post::getId)
-                .collect(Collectors.toList());
+        List<Long> postIds = posts.stream().map(Post::getId).collect(Collectors.toList());
 
         Map<Long, Long> commentCountMap = queryFactory
-                .select(Projections.constructor(IdCountDTO.class,
-                        comment.post.id,
-                        comment.countDistinct().longValue()))
+                .select(Projections.constructor(IdCountDTO.class, comment.post.id, comment.countDistinct().longValue()))
                 .from(comment)
                 .where(comment.post.id.in(postIds))
                 .groupBy(comment.post.id)
-                .fetch()
-                .stream()
-                .collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
+                .fetch().stream().collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
 
         Map<Long, Long> fileCountMap = queryFactory
-                .select(Projections.constructor(IdCountDTO.class,
-                        files.post.id,
-                        files.countDistinct().longValue()))
+                .select(Projections.constructor(IdCountDTO.class, files.post.id, files.countDistinct().longValue()))
                 .from(files)
                 .where(files.post.id.in(postIds))
                 .groupBy(files.post.id)
-                .fetch()
-                .stream()
-                .collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
+                .fetch().stream().collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
 
         List<PostDTO> postDtos = posts.stream()
                 .map(p -> {
@@ -296,13 +270,8 @@ public class PostService {
                 .where(post.id.in(topPostIds))
                 .fetch();
 
-        Map<Long, Post> postMap = postsUnordered.stream()
-                .collect(Collectors.toMap(Post::getId, p -> p));
-
-        List<Post> postsOrdered = topPostIds.stream()
-                .map(postMap::get)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+        Map<Long, Post> postMap = postsUnordered.stream().collect(Collectors.toMap(Post::getId, p -> p));
+        List<Post> postsOrdered = topPostIds.stream().map(postMap::get).filter(Objects::nonNull).collect(Collectors.toList());
 
         return enrichPostsWithCounts(postsOrdered);
     }
@@ -318,37 +287,22 @@ public class PostService {
 
         Map<Long, Long> commentCountMap = queryFactory
                 .select(Projections.constructor(IdCountDTO.class, comment.post.id, comment.countDistinct().longValue()))
-                .from(comment)
-                .where(comment.post.id.in(postIds))
-                .groupBy(comment.post.id)
-                .fetch()
-                .stream()
-                .collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
+                .from(comment).where(comment.post.id.in(postIds)).groupBy(comment.post.id)
+                .fetch().stream().collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
 
         Map<Long, Long> fileCountMap = queryFactory
                 .select(Projections.constructor(IdCountDTO.class, files.post.id, files.countDistinct().longValue()))
-                .from(files)
-                .where(files.post.id.in(postIds))
-                .groupBy(files.post.id)
-                .fetch()
-                .stream()
-                .collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
+                .from(files).where(files.post.id.in(postIds)).groupBy(files.post.id)
+                .fetch().stream().collect(Collectors.toMap(IdCountDTO::getId, IdCountDTO::getCount));
 
-        return posts.stream()
-                .map(p -> {
-                    PostDTO dto = postMapper.toDto(p);
-                    if (p.getAuthor() != null) {
-                        dto.setUserId(p.getAuthor().getId());
-                    }
-                    if (p.getMenu() != null) {
-                        // Add menu specific DTO fields if needed
-                    }
-                    dto.setUpdatedAt(p.getLastModifiedDate());
-                    dto.setCommentCount(commentCountMap.getOrDefault(p.getId(), 0L));
-                    dto.setFileCount(fileCountMap.getOrDefault(p.getId(), 0L));
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        return posts.stream().map(p -> {
+            PostDTO dto = postMapper.toDto(p);
+            if (p.getAuthor() != null) dto.setUserId(p.getAuthor().getId());
+            dto.setUpdatedAt(p.getLastModifiedDate());
+            dto.setCommentCount(commentCountMap.getOrDefault(p.getId(), 0L));
+            dto.setFileCount(fileCountMap.getOrDefault(p.getId(), 0L));
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     private LocalDateTime calculateStartDateTime(TimePeriod period) {
@@ -365,40 +319,19 @@ public class PostService {
         }
     }
 
-    private Long getCurrentUserId(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new IllegalStateException("로그인이 필요합니다.");
-        }
-        String username = authentication.getName();
-        return userRepository.findByUsername(username)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + username))
-                .getId();
-    }
-
-    private User findUserByIdOrThrow(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + userId));
-    }
-
     private Menu findMenuByIdOrThrow(Long menuId) {
         return menuRepository.findById(menuId)
-                .orElseThrow(() -> new IllegalArgumentException("메뉴를 찾을 수 없습니다: " + menuId));
+                .orElseThrow(() -> new EntityNotFoundException("메뉴를 찾을 수 없습니다: " + menuId));
     }
 
     private Post findPostByIdOrThrow(Long postId) {
         return postRepository.findById(postId)
-                .orElseThrow(() -> new IllegalArgumentException("게시글을 찾을 수 없습니다: " + postId));
+                .orElseThrow(() -> new EntityNotFoundException("게시글을 찾을 수 없습니다: " + postId));
     }
 
     private void checkBlogOwnership(Menu menu, Long currentUserId) {
         if (!Objects.equals(menu.getBlog().getUser().getId(), currentUserId)) {
             throw new IllegalStateException("해당 블로그에 접근할 권한이 없습니다.");
-        }
-    }
-
-    private void checkPostOwnership(Post post, Long currentUserId) {
-        if (!Objects.equals(post.getAuthor().getId(), currentUserId)) {
-            throw new IllegalStateException("해당 게시글에 대한 권한이 없습니다.");
         }
     }
 
@@ -426,7 +359,6 @@ public class PostService {
             } else {
                 post.setFiles(new ArrayList<>());
             }
-
             List<FileDTO> uploadedFileDtos = fileService.uploadFiles(files, post.getId());
             List<StoredFile> newFileEntities = mapFileDtosToEntities(uploadedFileDtos, post);
             post.getFiles().addAll(newFileEntities);
@@ -434,45 +366,35 @@ public class PostService {
     }
 
     private List<StoredFile> mapFileDtosToEntities(List<FileDTO> fileDtos, Post post) {
-        return fileDtos.stream()
-                .map(dto -> {
-                    StoredFile file = new StoredFile();
-                    file.setId(dto.getId());
-                    file.setFileName(dto.getFileName());
-                    file.setFilePath(dto.getFilePath());
-                    file.setContentType(dto.getContentType());
-                    file.setFileSize(dto.getFileSize());
-                    file.setPost(post);
-                    return file;
-                })
-                .collect(Collectors.toList());
+        return fileDtos.stream().map(dto -> {
+            StoredFile file = new StoredFile();
+            file.setId(dto.getId());
+            file.setFileName(dto.getFileName());
+            file.setFilePath(dto.getFilePath());
+            file.setContentType(dto.getContentType());
+            file.setFileSize(dto.getFileSize());
+            file.setPost(post);
+            return file;
+        }).collect(Collectors.toList());
     }
 
     private boolean tryIncrementViewCount(Post post, String clientIp, Authentication authentication) {
         String redisKey = buildViewCountRedisKey(post.getId(), clientIp, authentication);
-        log.info("Generated Redis Key for view count check: {}", redisKey);
-
         Boolean isNewView = redisTemplate.opsForValue().setIfAbsent(redisKey, "1", VIEW_COUNT_TTL_SECONDS, TimeUnit.SECONDS);
 
         if (Boolean.TRUE.equals(isNewView)) {
             int updatedRows = postRepository.incrementViewCount(post.getId());
-
             if (updatedRows > 0) {
                 post.setViewCount(post.getViewCount() == null ? 1L : post.getViewCount() + 1);
                 return true;
-            } else {
-                return false;
             }
         }
         return false;
     }
 
     private String buildViewCountRedisKey(Long postId, String clientIp, Authentication authentication) {
-        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getPrincipal())) {
-            Long userId = getCurrentUserId(authentication);
-            return String.format(VIEW_COUNT_KEY_PREFIX_USER, postId, userId, clientIp);
-        } else {
-            return String.format(VIEW_COUNT_KEY_PREFIX_ANONYMOUS, postId, clientIp);
-        }
+        return securityUtil.getCurrentUserId()
+                .map(userId -> String.format(VIEW_COUNT_KEY_PREFIX_USER, postId, userId, clientIp))
+                .orElseGet(() -> String.format(VIEW_COUNT_KEY_PREFIX_ANONYMOUS, postId, clientIp));
     }
 }

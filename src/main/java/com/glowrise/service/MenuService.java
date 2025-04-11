@@ -2,16 +2,14 @@ package com.glowrise.service;
 
 import com.glowrise.domain.Blog;
 import com.glowrise.domain.Menu;
-import com.glowrise.domain.User;
 import com.glowrise.repository.BlogRepository;
 import com.glowrise.repository.MenuRepository;
-import com.glowrise.repository.UserRepository;
 import com.glowrise.service.dto.MenuDTO;
 import com.glowrise.service.mapper.MenuMapper;
+import com.glowrise.service.util.SecurityUtil;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,20 +20,18 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
-@Slf4j
 @RequiredArgsConstructor
 public class MenuService {
 
     private final MenuRepository menuRepository;
     private final MenuMapper menuMapper;
     private final BlogRepository blogRepository;
-    private final UserRepository userRepository;
+    private final SecurityUtil securityUtil; // Added
 
     @Transactional
-    public MenuDTO createMenu(MenuDTO dto, Authentication authentication) {
-        Long userId = getAuthenticatedUserId(authentication);
+    @PreAuthorize("@authorizationService.isBlogOwner(#dto.blogId)")
+    public MenuDTO createMenu(MenuDTO dto, Authentication ignoredAuthentication) {
         Blog blog = findBlogByIdOrThrow(dto.getBlogId());
-        ensureBlogOwnership(blog, userId, "메뉴를 생성할");
 
         Menu menu = menuMapper.toEntity(dto);
 
@@ -52,20 +48,14 @@ public class MenuService {
         }
 
         Menu savedMenu = menuRepository.save(menu);
-        log.info("블로그 ID {}에 메뉴 생성 성공 (메뉴 ID: {})", blog.getId(), savedMenu.getId());
         return menuMapper.toDto(savedMenu);
     }
 
     @Transactional
-    public void updateMenuOrder(Long blogId, List<MenuDTO> menus, Authentication authentication) {
-        Long userId = getAuthenticatedUserId(authentication);
-        Blog blog = findBlogByIdOrThrow(blogId);
-        ensureBlogOwnership(blog, userId, "메뉴 순서를 수정할");
-
-        log.info("블로그 ID {}의 메뉴 순서 업데이트 시작 ({}개 항목)", blogId, menus.size());
+    @PreAuthorize("@authorizationService.isBlogOwner(#blogId)")
+    public void updateMenuOrder(Long blogId, List<MenuDTO> menus, Authentication ignoredAuthentication) {
         for (MenuDTO dto : menus) {
             if (dto.getId() == null) {
-                log.warn("메뉴 ID가 없는 DTO 건너뜀: {}", dto);
                 continue;
             }
             Menu menu = findMenuByIdOrThrow(dto.getId());
@@ -82,19 +72,15 @@ public class MenuService {
                 validateParentMenu(parent, blogId);
             }
             menu.setParent(parent);
-
-            log.debug("메뉴 ID {}의 순서 ({}), 부모 ({}) 업데이트 예정", dto.getId(), dto.getOrderIndex(), dto.getParentId());
         }
-        log.info("블로그 ID {}의 메뉴 순서 업데이트 완료", blogId);
     }
 
     @Transactional
-    public MenuDTO updateMenu(Long menuId, MenuDTO dto, Authentication authentication) {
-        Long userId = getAuthenticatedUserId(authentication);
+    @PreAuthorize("@authorizationService.isBlogOwnerByMenuId(#menuId)")
+    public MenuDTO updateMenu(Long menuId, MenuDTO dto, Authentication ignoredAuthentication) {
         Menu menu = findMenuByIdOrThrow(menuId);
-        ensureBlogOwnership(menu.getBlog(), userId, "메뉴를 수정할");
 
-        if (!Objects.equals(menu.getBlog().getId(), dto.getBlogId())) {
+        if (dto.getBlogId() != null && !Objects.equals(menu.getBlog().getId(), dto.getBlogId())) {
             throw new IllegalArgumentException("메뉴의 블로그 소속(blogId)은 변경할 수 없습니다.");
         }
 
@@ -116,24 +102,20 @@ public class MenuService {
         }
 
         Menu updatedMenu = menuRepository.save(menu);
-        log.info("메뉴 업데이트 성공 (메뉴 ID: {})", menuId);
         return menuMapper.toDto(updatedMenu);
     }
 
     @Transactional
-    public void deleteMenu(Long menuId, Authentication authentication) {
-        Long userId = getAuthenticatedUserId(authentication);
+    @PreAuthorize("@authorizationService.isBlogOwnerByMenuId(#menuId)")
+    public void deleteMenu(Long menuId, Authentication ignoredAuthentication) {
         Menu menu = findMenuByIdOrThrow(menuId);
-        ensureBlogOwnership(menu.getBlog(), userId, "메뉴를 삭제할");
-
         menuRepository.delete(menu);
-        log.info("메뉴 삭제 성공 (메뉴 ID: {})", menuId);
     }
 
     @Transactional(readOnly = true)
     public List<MenuDTO> getMenusByBlogId(Long blogId) {
         List<Menu> menus = menuRepository.findByBlogIdOrderByOrderIndexAsc(blogId);
-
+        // Consider using MenuMapper if it maps all necessary fields including subMenuIds
         List<MenuDTO> menuDtos = new ArrayList<>();
         for (Menu menuEntity : menus) {
             MenuDTO dto = new MenuDTO();
@@ -149,7 +131,6 @@ public class MenuService {
             } else {
                 dto.setSubMenuIds(new ArrayList<>());
             }
-
             menuDtos.add(dto);
         }
         return menuDtos;
@@ -167,16 +148,6 @@ public class MenuService {
         return menuMapper.toDto(subMenus);
     }
 
-    private Long getAuthenticatedUserId(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated() || "anonymousUser".equals(authentication.getPrincipal())) {
-            throw new IllegalStateException("로그인이 필요합니다.");
-        }
-        String username = authentication.getName();
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new EntityNotFoundException("사용자를 찾을 수 없습니다: " + username));
-        return user.getId();
-    }
-
     private Blog findBlogByIdOrThrow(Long blogId) {
         return blogRepository.findById(blogId)
                 .orElseThrow(() -> new EntityNotFoundException("블로그를 찾을 수 없습니다 (ID: " + blogId + ")"));
@@ -185,13 +156,6 @@ public class MenuService {
     private Menu findMenuByIdOrThrow(Long menuId) {
         return menuRepository.findById(menuId)
                 .orElseThrow(() -> new EntityNotFoundException("메뉴를 찾을 수 없습니다 (ID: " + menuId + ")"));
-    }
-
-    private void ensureBlogOwnership(Blog blog, Long userId, String action) {
-        if (blog.getUser() == null || !Objects.equals(blog.getUser().getId(), userId)) {
-            log.warn("사용자 ID {}가 블로그 ID {}의 {} 권한이 없습니다.", userId, blog.getId(), action);
-            throw new AccessDeniedException("해당 블로그의 " + action + " 권한이 없습니다.");
-        }
     }
 
     private void validateParentMenu(Menu parent, Long expectedBlogId) {

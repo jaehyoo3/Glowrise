@@ -7,8 +7,6 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -22,13 +20,11 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserController {
 
-    private static final Logger log = LoggerFactory.getLogger(UserController.class);
     private final UserService userService;
 
     @PostMapping("/signup")
     public ResponseEntity<UserDTO> signUp(@RequestBody UserDTO dto) {
         UserDTO createdUser = userService.signUp(dto);
-        log.info("회원가입 성공: {}", createdUser.getUsername());
         return ResponseEntity.status(HttpStatus.CREATED).body(createdUser);
     }
 
@@ -38,7 +34,6 @@ public class UserController {
         return ResponseEntity.ok(userProfile);
     }
 
-
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserDTO> getCurrentUser(Authentication authentication) {
@@ -46,13 +41,11 @@ public class UserController {
         return ResponseEntity.ok(userDTO);
     }
 
-
     @PutMapping("/profile/me")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<UserDTO> updateUserProfile(
             @RequestBody UserDTO dto,
-            Authentication authentication) { // PathVariable 제거됨
-
+            Authentication authentication) {
         UserDTO updatedUser = userService.updateUserProfile(authentication, dto);
         return ResponseEntity.ok(updatedUser);
     }
@@ -64,15 +57,12 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, String>> refreshToken(HttpServletRequest request, HttpServletResponse response) {
         String refreshToken = getCookieValue(request, "RefreshToken");
-
         Map<String, String> tokens = userService.refreshToken(refreshToken);
         return ResponseEntity.ok(tokens);
     }
-
 
     private String getCookieValue(HttpServletRequest request, String name) {
         Cookie[] cookies = request.getCookies();
@@ -83,8 +73,6 @@ public class UserController {
                 }
             }
         }
-        log.debug("쿠키 '{}'를 찾을 수 없습니다.", name);
         return null;
     }
-
 }
