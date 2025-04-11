@@ -15,18 +15,18 @@ public class StoredFile extends AbstractAuditingEntity<Long> {
     private Long id;
 
     @Column(nullable = false)
-    private String fileName; // 원본 파일 이름
+    private String fileName;
 
     @Column(nullable = false)
-    private String filePath; // 서버에 저장된 파일 경로
+    private String filePath;
 
     @Column(nullable = false)
-    private String contentType; // 파일 MIME 타입 (예: "image/png")
+    private String contentType;
 
     @Column(nullable = false)
-    private Long fileSize; // 파일 크기 (바이트 단위)
+    private Long fileSize;
 
     @ManyToOne
     @JoinColumn(name = "post_id")
-    private Post post; // 파일이 속한 게시글 (nullable)
+    private Post post;
 }

@@ -21,7 +21,6 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         String roleName = user.getRole().name().replace("ROLE_", "");
 
-        // Spring Security 6.x.x의 User 빌더 사용
         return User.withUsername(user.getUsername())
                 .password(user.getPassword())
                 .roles(roleName)

@@ -18,10 +18,10 @@ public class Menu extends AbstractAuditingEntity<Long> {
     private Long id;
 
     @Column(nullable = false)
-    private String name; // 메뉴 이름
+    private String name;
 
     @Column
-    private Integer orderIndex; // 메뉴 순서
+    private Integer orderIndex;
 
     @ManyToOne
     @JoinColumn(name = "blog_id", nullable = false)

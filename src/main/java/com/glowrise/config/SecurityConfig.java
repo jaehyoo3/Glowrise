@@ -52,27 +52,25 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorizeRequests ->
                         authorizeRequests
-                                // 인증 없이 접근 가능한 엔드포인트
                                 .requestMatchers(
-                                        "/api/posts",           // 전체 게시글 조회
-                                        "/api/posts/{postId}",  // 특정 게시글 조회
-                                        "/api/posts/user/{userId}", // 사용자별 게시글 조회
-                                        "/api/posts/blog/{blogId}", // 블로그별 게시글 조회
-                                        "/api/posts/blog/{blogId}/{menuId}", // 블로그 메뉴별 게시글 조회
-                                        "/api/blogs",           // 전체 블로그 조회
-                                        "/api/blogs/{url}",     // URL로 블로그 조회
-                                        "/uploads/**",  // <-- 이 줄 추가!
-                                        "/api/blogs/id/{id}",   // ID로 블로그 조회
-                                        "/api/blogs/user/{userId}", // 사용자별 블로그 조회
-                                        "/api/menus/blog/{blogId}", // 블로그별 메뉴 조회
-                                        "/api/menus/{menuId}/submenus", // 서브메뉴 조회
-                                        "/api/comments/post/{postId}", // 게시글별 댓글 조회
-                                        "/api/comments/{commentId}", // 특정 댓글 조회
-                                        "/api/comments/{commentId}/replies", // 댓글의 답글 조회
-                                        "/api/files/{fileId}",  // 파일 정보 조회
-                                        "/api/files/download/{fileId}" // 파일 다운로드
+                                        "/api/posts",
+                                        "/api/posts/{postId}",
+                                        "/api/posts/user/{userId}",
+                                        "/api/posts/blog/{blogId}",
+                                        "/api/posts/blog/{blogId}/{menuId}",
+                                        "/api/blogs",
+                                        "/api/blogs/{url}",
+                                        "/uploads/**",
+                                        "/api/blogs/id/{id}",
+                                        "/api/blogs/user/{userId}",
+                                        "/api/menus/blog/{blogId}",
+                                        "/api/menus/{menuId}/submenus",
+                                        "/api/comments/post/{postId}",
+                                        "/api/comments/{commentId}",
+                                        "/api/comments/{commentId}/replies",
+                                        "/api/files/{fileId}",
+                                        "/api/files/download/{fileId}"
                                 ).permitAll()
-                                // 회원가입, 로그인, 리프레시 토큰 등 인증 없이 접근 가능한 엔드포인트
                                 .requestMatchers(
                                         "/api/users/signup",
                                         "/login",
@@ -82,11 +80,10 @@ public class SecurityConfig {
                                         "/h2-console/**",
                                         "/ws/**"
                                 ).permitAll()
-                                // 나머지 모든 요청은 인증 필요
                                 .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptionHandling ->
-                        exceptionHandling.authenticationEntryPoint(apiAuthenticationEntryPoint()) // 401 처리기 등록
+                        exceptionHandling.authenticationEntryPoint(apiAuthenticationEntryPoint())
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .formLogin(form -> form
@@ -124,7 +121,6 @@ public class SecurityConfig {
     @Bean
     public AuthenticationEntryPoint apiAuthenticationEntryPoint() {
         return (request, response, authException) -> {
-            // API 요청에 대해 인증 실패 시 401 Unauthorized 에러 반환
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
         };
     }

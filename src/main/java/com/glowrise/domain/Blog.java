@@ -34,7 +34,7 @@ public class Blog extends AbstractAuditingEntity<Long> {
     private User user;
 
     @OneToMany(mappedBy = "blog", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Menu> menus = new ArrayList<>();  // 메뉴 리스트 추가
+    private List<Menu> menus = new ArrayList<>();
 
     public Blog(BlogDTO dto) {
         this.title = dto.getTitle();

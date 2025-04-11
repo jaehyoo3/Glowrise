@@ -18,13 +18,13 @@ public class CommentDTO {
 
     private Long userId;
 
-    private Long parentId; // 추가
+    private Long parentId;
 
-    private String authorName; // 추가
+    private String authorName;
 
-    private String email; // 추가
+    private String email;
 
-    private List<CommentDTO> replies = new ArrayList<>(); // List<Comment> -> List<CommentDTO>
+    private List<CommentDTO> replies = new ArrayList<>();
 
     private boolean deleted;
 

@@ -19,7 +19,6 @@ public interface MenuRepository extends JpaRepository<Menu, Long> {
     @Query("SELECT m.id FROM Menu m WHERE m.id = :parentId OR m.parent.id = :parentId")
     List<Long> findAllMenuIdsByParent(@Param("parentId") Long parentId);
 
-    // 블로그 ID로 메뉴 목록 조회 (정렬 포함)
     List<Menu> findByBlogIdOrderByOrderIndexAsc(Long blogId);
 }
 

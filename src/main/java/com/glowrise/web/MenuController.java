@@ -37,9 +37,7 @@ public class MenuController {
             @PathVariable Long blogId,
             @RequestBody List<MenuDTO> menus,
             Authentication authentication) {
-        log.info("Received request to update menu order for blogId: {}, menus: {}", blogId, menus);
         menuService.updateMenuOrder(blogId, menus, authentication);
-        log.info("Successfully updated menu order for blogId: {}", blogId);
         return ResponseEntity.ok().build();
     }
 

@@ -23,7 +23,7 @@ public class JWTUtil {
 
     public String generateAccessToken(Long userId, String username, String role, Long expiredMs) {
         return Jwts.builder()
-                .claim("userId", userId) // 사용자 ID 추가
+                .claim("userId", userId)
                 .claim("username", username)
                 .claim("role", role)
                 .issuedAt(new Date(System.currentTimeMillis()))

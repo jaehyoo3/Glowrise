@@ -26,8 +26,8 @@ public class NotificationConsumer {
     private final UserRepository userRepository;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
-    private final SimpMessagingTemplate messagingTemplate; // WebSocket 메시지 전송
-
+    private final SimpMessagingTemplate messagingTemplate;
+    
     @KafkaListener(topics = "notification-topic", groupId = "notification-group")
     public void consumeNotification(NotificationEvent event) {
         User user = userRepository.findById(event.getUserId())
@@ -61,6 +61,12 @@ public class NotificationConsumer {
 
         notificationRepository.save(notification);
 
+        NotificationDTO notificationDTO = getNotificationDTO(notification, post);
+
+        messagingTemplate.convertAndSend("/topic/notifications/" + event.getUserId(), notificationDTO);
+    }
+
+    private static NotificationDTO getNotificationDTO(Notification notification, Post post) {
         NotificationDTO notificationDTO = new NotificationDTO();
         notificationDTO.setId(notification.getId());
         notificationDTO.setMessage(notification.getMessage());
@@ -70,7 +76,6 @@ public class NotificationConsumer {
         notificationDTO.setMenuId(post != null && post.getMenu() != null ? post.getMenu().getId() : null);
         notificationDTO.setRead(notification.isRead());
         notificationDTO.setCreatedDate(notification.getCreatedDate());
-
-        messagingTemplate.convertAndSend("/topic/notifications/" + event.getUserId(), notificationDTO);
+        return notificationDTO;
     }
 }

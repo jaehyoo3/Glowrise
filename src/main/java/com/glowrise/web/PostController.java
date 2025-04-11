@@ -83,7 +83,7 @@ public class PostController {
 
     @GetMapping("/getPopular")
     public ResponseEntity<List<PostDTO>> getPopularPosts(
-            @RequestParam(defaultValue = "WEEKLY") TimePeriod period) { // 기본값 주간
+            @RequestParam(defaultValue = "WEEKLY") TimePeriod period) {
         List<PostDTO> posts = postService.getPopularPostsByRecentModification(period, 10);
         return ResponseEntity.ok(posts);
     }

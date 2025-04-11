@@ -30,12 +30,12 @@ public class Comment extends AbstractAuditingEntity<Long> {
 
     @ManyToOne
     @JoinColumn(name = "parent_id")
-    private Comment parent;  // 대댓글 (부모 댓글)
+    private Comment parent;
 
     @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Comment> replies = new ArrayList<>();
 
-    private boolean deleted = false;  // 삭제 여부
+    private boolean deleted = false;
 
     public void markAsDeleted() {
         this.deleted = true;
