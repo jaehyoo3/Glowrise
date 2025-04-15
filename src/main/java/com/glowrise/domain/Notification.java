@@ -4,16 +4,17 @@ import com.glowrise.domain.enumerate.NotificationType;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.util.HashMap;
-import java.util.Map;
-
 @Entity
-@Table(name = "notifications")
+@Table(name = "notifications", indexes = {
+        @Index(name = "idx_notification_user_read_deleted_created", columnList = "user_id, isRead, deleted, createdDate"),
+        @Index(name = "idx_notification_post", columnList = "post_id"),
+        @Index(name = "idx_notification_comment", columnList = "comment_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
-@AllArgsConstructor
 @Builder
+@AllArgsConstructor
 public class Notification extends AbstractAuditingEntity<Long> {
 
     @Id
@@ -38,12 +39,6 @@ public class Notification extends AbstractAuditingEntity<Long> {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "comment_id")
     private Comment comment;
-
-    @ElementCollection
-    @MapKeyColumn(name = "payload_key")
-    @Column(name = "value")
-    @CollectionTable(name = "notification_payload", joinColumns = @JoinColumn(name = "notification_id"))
-    private Map<String, String> payload = new HashMap<>();
 
     @Column(nullable = false)
     private boolean isRead = false;

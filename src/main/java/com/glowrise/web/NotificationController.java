@@ -34,4 +34,12 @@ public class NotificationController {
         notificationService.markAsRead(userId, id);
         return ResponseEntity.ok().build();
     }
+
+    @PutMapping("/read-all")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> markAllAsRead(Authentication ignoredAuthentication) {
+        Long userId = securityUtil.getCurrentUserIdOrThrow();
+        notificationService.markAllAsRead(userId);
+        return ResponseEntity.ok().build();
+    }
 }
