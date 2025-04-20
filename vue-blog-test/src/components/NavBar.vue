@@ -11,51 +11,121 @@
             placeholder="검색"
             v-model="searchQuery"
             @keyup.enter="handleSearch"/>
-        <button class="search-button" @click="handleSearch"><i class="fas fa-search"></i></button>
+        <button class="search-button" @click="handleSearch">
+          <i class="pi pi-search"></i>
+        </button>
       </div>
+
       <div class="navbar-menu">
         <template v-if="isLoggedIn">
           <div class="notification-menu" @click.stop="toggleNotificationDropdown">
-            <i class="fas fa-bell"></i>
-            <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
+            <button class="notification-button">
+              <i class="pi pi-bell"></i>
+              <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount }}</span>
+            </button>
+
             <div v-if="showNotificationDropdown" class="dropdown-menu notification-dropdown" @click.stop>
-              <div v-if="notifications.length === 0 && unreadCount === 0" class="dropdown-item no-notifications">
-                알림이 없습니다.
+              <div class="notification-header">
+                <h3>알림</h3>
+                <button v-if="unreadCount > 0" class="mark-all-read-btn" @click="handleMarkAllRead">
+                  전체 읽음
+                </button>
               </div>
-              <div v-else>
-                <div v-if="unreadCount > 0" class="dropdown-item mark-all-read-container">
-                  <button class="mark-all-read-btn" @click="handleMarkAllRead">
-                    전체 읽음
-                  </button>
+
+              <div class="notification-content">
+                <div v-if="notifications.length === 0" class="empty-notifications">
+                  <i class="pi pi-inbox"></i>
+                  <p>알림이 없습니다</p>
                 </div>
+
                 <div
                     v-for="notification in notifications"
                     :key="notification.id"
-                    class="dropdown-item notification-item"
+                    class="notification-item"
                     :class="{ 'unread': !notification.isRead }"
                     @click="handleNotificationClick(notification)"
                 >
-                  <span>{{ notification.message }}</span> <small>{{ formatDate(notification.createdDate) }}</small>
+                  <div v-if="!notification.isRead" class="notification-indicator"></div>
+                  <div class="notification-text">
+                    <p>{{ notification.message }}</p>
+                    <span class="notification-time">{{ formatDate(notification.createdDate) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
+
           <div class="user-menu">
-            <PrimeButton
-                :label="displayNicknameOrUsername"
-                aria-controls="overlay_menu"
-                aria-haspopup="true" class="p-button-rounded p-button-text p-button-plain user-menu-button"
-                icon="pi pi-user"
-                type="button"
-                @click="toggleUserMenu"
-            />
-            <PrimeMenu id="overlay_menu" ref="userMenuRef" :model="userMenuItems" :popup="true"/>
+            <button class="user-menu-button" @click="toggleUserMenu">
+              <div class="user-avatar">
+                <img :alt="displayNicknameOrUsername" :src="displayProfileImage"/>
+              </div>
+              <span class="username">{{ displayNicknameOrUsername }}</span>
+              <i class="pi pi-chevron-down"></i>
+            </button>
+
+            <div v-if="showUserDropdown" class="dropdown-menu user-dropdown">
+              <div class="user-info">
+                <div class="user-avatar-large">
+                  <img :alt="displayNicknameOrUsername" :src="displayProfileImage"/>
+                </div>
+                <div class="user-details">
+                  <h3>{{ displayNicknameOrUsername }}</h3>
+                  <p>{{ userEmail }}</p>
+                </div>
+              </div>
+
+              <div class="menu-items">
+                <router-link v-if="hasBlog" :to="`/${blogUrl}`" class="menu-item">
+                  <i class="pi pi-home"></i>
+                  <span>내 블로그</span>
+                </router-link>
+
+                <router-link v-else-if="nickName" class="menu-item" to="/blog/create">
+                  <i class="pi pi-plus"></i>
+                  <span>블로그 만들기</span>
+                </router-link>
+
+                <button v-else class="menu-item" @click="openProfileCompletionModal">
+                  <i class="pi pi-user-plus"></i>
+                  <span>닉네임 설정하기</span>
+                </button>
+
+                <router-link class="menu-item" to="/profile/edit">
+                  <i class="pi pi-user-edit"></i>
+                  <span>내 정보 수정</span>
+                </router-link>
+
+                <template v-if="isAdmin">
+                  <div class="menu-divider"></div>
+                  <div class="menu-group">관리자 메뉴</div>
+
+                  <router-link class="menu-item" to="/admin/users">
+                    <i class="pi pi-users"></i>
+                    <span>사용자 관리</span>
+                  </router-link>
+
+                  <button class="menu-item" @click="openCreateAdModal">
+                    <i class="pi pi-plus-circle"></i>
+                    <span>광고 생성</span>
+                  </button>
+                </template>
+
+                <div class="menu-divider"></div>
+
+                <button class="menu-item logout" @click="handleLogout">
+                  <i class="pi pi-power-off"></i>
+                  <span>로그아웃</span>
+                </button>
+              </div>
+            </div>
           </div>
         </template>
+
         <template v-else>
           <div class="auth-buttons">
-            <PrimeButton class="signup-button p-button-sm" label="회원가입" @click="openSignupModal"/>
-            <PrimeButton class="login-button p-button-sm" label="로그인" @click="openLoginModal"/>
+            <button class="signup-button" @click="openSignupModal">회원가입</button>
+            <button class="login-button" @click="openLoginModal">로그인</button>
           </div>
         </template>
       </div>
@@ -83,8 +153,6 @@ import {websocketService} from '@/services/websocketService';
 import LoginSignupModal from '@/components/LoginSignupModal.vue';
 import AdvertisementModal from '@/components/admin/AdvertisementModal.vue';
 
-// PrimeVue 컴포넌트는 main.js에서 전역 등록됨을 가정
-
 export default {
   name: 'NavBar',
   components: {
@@ -93,8 +161,9 @@ export default {
   },
   data() {
     return {
-      searchQuery: '', // 검색어 바인딩
+      searchQuery: '',
       showNotificationDropdown: false,
+      showUserDropdown: false,
       isLoggingOut: false,
       notifications: [],
       unreadCount: 0,
@@ -105,8 +174,7 @@ export default {
     };
   },
   computed: {
-    // Vuex 상태 및 게터 매핑
-    ...mapState([]), // 필요시 상태 추가
+    ...mapState([]),
     ...mapGetters([
       'isLoggedIn', 'userId', 'username', 'nickName', 'userEmail',
       'userProfileImage', 'blogUrl', 'hasBlog', 'isLoading', 'isAdmin'
@@ -116,53 +184,6 @@ export default {
     },
     displayNicknameOrUsername() {
       return this.nickName || this.username || '사용자';
-    },
-    userMenuItems() {
-      let items = [];
-      if (this.hasBlog) {
-        items.push({
-          label: '내 블로그',
-          icon: 'pi pi-fw pi-home',
-          command: () => this.$router.push(`/${this.blogUrl}`).catch(() => {
-          })
-        });
-      } else {
-        if (this.nickName) {
-          items.push({
-            label: '블로그 만들기',
-            icon: 'pi pi-fw pi-plus',
-            command: () => this.$router.push('/blog/create').catch(() => {
-            })
-          });
-        } else {
-          items.push({
-            label: '닉네임 설정하기',
-            icon: 'pi pi-fw pi-user-plus',
-            command: () => this.openProfileCompletionModal()
-          });
-        }
-      }
-      items.push({
-        label: '내 정보 수정',
-        icon: 'pi pi-fw pi-user-edit',
-        command: () => this.$router.push('/profile/edit').catch(() => {
-        })
-      });
-      if (this.isAdmin) {
-        items.push({separator: true}, {
-          label: '관리자 메뉴', icon: 'pi pi-fw pi-cog',
-          items: [
-            {
-              label: '사용자 관리', icon: 'pi pi-fw pi-users', command: () => this.$router.push('/admin/users').catch(() => {
-              })
-            }, // 경로 확인
-            {label: '광고 생성', icon: 'pi pi-fw pi-plus-circle', command: () => this.openCreateAdModal()},
-          ]
-        });
-      }
-      items.push({separator: true});
-      items.push({label: '로그아웃', icon: 'pi pi-fw pi-power-off', command: () => this.handleLogout()});
-      return items;
     }
   },
   watch: {
@@ -195,29 +216,33 @@ export default {
     ...mapActions(['fetchCurrentUser', 'logoutAndClear']),
 
     handleOutsideClick(event) {
+      // 알림 메뉴 외부 클릭 처리
       const notificationMenu = this.$el.querySelector('.notification-menu');
       if (notificationMenu && !notificationMenu.contains(event.target)) {
         this.showNotificationDropdown = false;
       }
-      // PrimeMenu는 자체 처리
+
+      // 사용자 메뉴 외부 클릭 처리
+      const userMenu = this.$el.querySelector('.user-menu');
+      if (userMenu && !userMenu.contains(event.target)) {
+        this.showUserDropdown = false;
+      }
     },
-    toggleUserMenu(event) {
-      this.$refs.userMenuRef.toggle(event);
+
+    toggleUserMenu() {
+      this.showUserDropdown = !this.showUserDropdown;
       this.showNotificationDropdown = false; // 사용자 메뉴 열 때 알림 닫기
     },
+
     toggleNotificationDropdown() {
       this.showNotificationDropdown = !this.showNotificationDropdown;
-      // 알림 메뉴 열 때 사용자 메뉴 닫기 (PrimeMenu API 확인 필요, 보통 외부 클릭으로 닫힘)
-      // if (this.showNotificationDropdown && this.$refs.userMenuRef?.visible) {
-      //   this.$refs.userMenuRef.hide();
-      // }
+      this.showUserDropdown = false; // 알림 메뉴 열 때 사용자 메뉴 닫기
+
       if (this.showNotificationDropdown && this.isLoggedIn) {
         this.fetchNotifications(); // 열 때마다 최신 정보 로드
       }
     },
-    closeDropdown() {
-      this.showNotificationDropdown = false;
-    },
+
     async fetchNotifications() {
       if (!this.isLoggedIn) return;
       try {
@@ -233,6 +258,7 @@ export default {
         this.unreadCount = 0;
       }
     },
+
     connectWebSocket() {
       if (!this.isLoggedIn || !this.userId) return;
       if (websocketService) websocketService.disconnect();
@@ -251,6 +277,7 @@ export default {
         }
       });
     },
+
     async handleNotificationClick(notification) {
       if (!notification || !notification.id) return;
       try {
@@ -267,12 +294,13 @@ export default {
           this.$router.push(targetPath).catch(() => {
           });
         }
-        this.closeDropdown();
+        this.showNotificationDropdown = false;
       } catch (error) {
         console.error('NavBar: 알림 처리 실패:', error);
         this.$toast.add({severity: 'error', summary: '오류', detail: '알림 처리 중 오류', life: 3000});
       }
     },
+
     async handleMarkAllRead() {
       if (this.unreadCount === 0) return;
       try {
@@ -285,7 +313,8 @@ export default {
         this.$toast.add({severity: 'error', summary: '오류', detail: '전체 알림 읽음 처리 중 오류', life: 3000});
       }
     },
-    formatDate(dateString) { // 상대 시간 포맷 함수
+
+    formatDate(dateString) {
       if (!dateString) return '';
       try {
         const date = new Date(dateString);
@@ -303,6 +332,7 @@ export default {
         return dateString;
       }
     },
+
     async handleLogout() {
       this.isLoggingOut = true;
       try {
@@ -321,23 +351,17 @@ export default {
       }
     },
 
-    // ***** 수정된 검색 처리 함수 *****
     handleSearch() {
-      const query = this.searchQuery.trim(); // 입력된 검색어 가져오기
-      if (query) { // 검색어가 있으면
-        // '/search' 경로로 이동, 쿼리 파라미터 'q'에 검색어 전달
+      const query = this.searchQuery.trim();
+      if (query) {
         this.$router.push({name: 'search', query: {q: query}})
-            .catch(err => { // 네비게이션 오류 처리 (옵션)
+            .catch(err => {
               if (err.name !== 'NavigationDuplicated' && !err.message.includes('Avoided redundant navigation')) {
                 console.error('Search navigation error:', err);
               }
             });
-        // 검색 후 입력창 비우기 (선택 사항)
-        // this.searchQuery = '';
       }
-      // 검색어가 없으면 아무 동작 안함 (또는 알림 표시)
     },
-    // ***** /수정된 검색 처리 함수 *****
 
     checkOAuthCompletionOnLoad() {
       const completionDataString = sessionStorage.getItem('oauth_profile_completion');
@@ -355,25 +379,30 @@ export default {
         this.oauthCompletionDataForModal = null;
       }
     },
+
     openLoginModal() {
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'login';
       this.showLoginModal = true;
     },
+
     openSignupModal() {
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
     },
+
     openProfileCompletionModal() {
       this.oauthCompletionDataForModal = {email: this.userEmail, oauthName: this.username};
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
     },
+
     closeLoginModal() {
       this.showLoginModal = false;
       this.oauthCompletionDataForModal = null;
     },
+
     async handleAuthSuccess() {
       this.closeLoginModal();
       try {
@@ -383,9 +412,11 @@ export default {
         console.error("NavBar: 인증 성공 후 사용자 정보 로드 오류:", error);
       }
     },
+
     openCreateAdModal() {
       this.isAdModalVisible = true;
     },
+
     handleAdSaved() {
       this.$toast.add({severity: 'success', summary: '성공', detail: '광고 생성 완료', life: 3000});
     }
@@ -393,336 +424,531 @@ export default {
 };
 </script>
 
-<style scoped>
-/* --- 전체 스타일 코드 --- */
+<style>
+/* --- 전체 네비게이션 스타일 --- */
 .navbar {
   background-color: white;
-  border-bottom: 1px solid #e0e0e0;
-  padding: 1rem 0; /* 상하 패딩 조정 */
+  border-bottom: 1px solid #f0f0f0;
+  padding: 0.8rem 0;
   position: sticky;
   top: 0;
   z-index: 1000;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 }
 
 .container {
-  max-width: 1200px; /* 콘텐츠 최대 너비 */
-  margin: 0 auto; /* 중앙 정렬 */
+  max-width: 1200px;
+  margin: 0 auto;
   display: flex;
-  align-items: center; /* 수직 중앙 정렬 */
-  justify-content: space-between; /* 요소 간 공간 분배 */
-  padding: 0 1.5rem; /* 좌우 패딩 */
-  box-sizing: border-box; /* 패딩 포함 너비 계산 */
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  box-sizing: border-box;
 }
 
+/* --- 로고 스타일 --- */
 .navbar-brand .logo {
-  font-size: 1.75rem; /* 로고 크기 */
-  font-weight: 700; /* 로고 두께 */
-  color: #000; /* 로고 색상 */
-  text-decoration: none; /* 밑줄 제거 */
-  letter-spacing: -0.5px; /* 글자 간격 */
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: #333;
+  text-decoration: none;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  padding: 0.2rem 0;
 }
 
-/* 검색창 스타일 */
+/* --- 검색창 스타일 --- */
 .search-bar {
-  flex-grow: 1; /* 가능한 공간 차지 */
-  max-width: 450px; /* 최대 너비 제한 */
-  position: relative; /* 버튼 위치 기준 */
-  margin: 0 2rem; /* 좌우 마진 */
+  flex-grow: 1;
+  max-width: 400px;
+  position: relative;
+  margin: 0 2rem;
 }
 
 .search-bar input {
-  width: 100%; /* 부모 요소 너비 채움 */
-  padding: 0.6rem 2.5rem 0.6rem 1rem; /* 패딩 (오른쪽은 아이콘 공간 확보) */
-  border: 1px solid #e0e0e0; /* 테두리 */
-  border-radius: 4px; /* 모서리 둥글게 */
-  font-size: 0.9rem; /* 글자 크기 */
-  background-color: #f8f9fa; /* 배경색 */
-  box-sizing: border-box; /* 패딩/테두리 포함 너비 계산 */
-  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* 부드러운 전환 효과 */
+  width: 100%;
+  padding: 0.65rem 2.5rem 0.65rem 1.2rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background-color: #f5f7fa;
+  box-sizing: border-box;
+  transition: all 0.2s ease-in-out;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
 }
 
 .search-bar input:focus {
-  border-color: #333; /* 포커스 시 테두리 색상 */
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1); /* 포커스 시 그림자 효과 */
-  outline: none; /* 기본 아웃라인 제거 */
+  background-color: #fff;
+  box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  outline: none;
 }
 
 .search-button {
-  position: absolute; /* 절대 위치 */
-  right: 10px; /* 오른쪽 끝에서 10px */
-  top: 50%; /* 수직 중앙 */
-  transform: translateY(-50%); /* 정확한 수직 중앙 정렬 */
-  border: none; /* 테두리 없음 */
-  background: none; /* 배경 없음 */
-  color: #666; /* 아이콘 색상 */
-  cursor: pointer; /* 마우스 커서 포인터 */
-  padding: 5px; /* 클릭 영역 확보 */
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  color: #888;
+  cursor: pointer;
+  padding: 5px;
+  transition: color 0.2s;
 }
 
-/* /검색창 스타일 */
+.search-button:hover {
+  color: #3182ce;
+}
 
-/* 메뉴 영역 */
+/* --- 메뉴 영역 --- */
 .navbar-menu {
   display: flex;
   align-items: center;
 }
 
-/* 알림 메뉴 */
+/* --- 알림 메뉴 스타일 --- */
 .notification-menu {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  position: relative; /* 드롭다운 기준 */
-  margin-right: 1.5rem; /* 오른쪽 마진 */
-  padding: 5px;
-  z-index: 1001; /* 드롭다운이 다른 요소 위에 오도록 */
+  position: relative;
+  margin-right: 1.2rem;
+  z-index: 1001;
 }
 
-.notification-menu i.fa-bell {
-  font-size: 1.3rem; /* 아이콘 크기 */
-  color: #333; /* 아이콘 색상 */
+.notification-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: #f5f7fa;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-button:hover {
+  background-color: #e6f0ff;
+}
+
+.notification-button i {
+  color: #4a5568;
+  font-size: 1.1rem;
 }
 
 .notification-badge {
-  position: absolute; /* 절대 위치 */
-  top: -6px; /* 위치 조정 */
-  right: -8px; /* 위치 조정 */
-  background-color: #333; /* 배경색 */
-  color: white; /* 글자색 */
-  border-radius: 50%; /* 원형 */
-  padding: 2px 5px; /* 내부 패딩 */
-  font-size: 0.7rem; /* 글자 크기 */
-  font-weight: 500; /* 글자 두께 */
-  line-height: 1; /* 줄 높이 */
-  min-width: 16px; /* 최소 너비 */
-  text-align: center; /* 중앙 정렬 */
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3); /* 그림자 */
+  position: absolute;
+  top: 0px;
+  right: 0px;
+  background-color: #e53e3e;
+  color: white;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 600;
+  height: 18px;
+  width: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
 }
 
-/* /알림 메뉴 */
-
-/* 드롭다운 메뉴 공통 */
-.dropdown-menu {
+/* --- 알림 드롭다운 --- */
+.notification-dropdown {
   position: absolute;
-  top: calc(100% + 10px); /* 부모 요소 아래 + 간격 */
-  right: 0; /* 오른쪽 정렬 */
+  top: calc(100% + 8px);
+  right: -100px;
+  width: 320px;
+  max-height: 480px;
   background-color: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  min-width: 160px; /* 최소 너비 */
-  padding: 0.5rem 0; /* 상하 패딩 */
-  z-index: 1000; /* 다른 요소 위 */
-  display: block;
-  list-style: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.notification-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.mark-all-read-btn {
+  background: none;
+  border: none;
+  color: #3182ce;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.mark-all-read-btn:hover {
+  color: #2b6cb0;
+  text-decoration: underline;
+}
+
+.notification-content {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.notification-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-content::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.empty-notifications {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: #a0aec0;
+}
+
+.empty-notifications i {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.empty-notifications p {
+  font-size: 0.9rem;
   margin: 0;
 }
 
-/* /드롭다운 메뉴 공통 */
-
-/* 알림 드롭다운 상세 */
-.notification-dropdown {
-  width: 300px; /* 너비 */
-  max-height: 400px; /* 최대 높이 */
-  overflow-y: auto; /* 내용 많으면 스크롤 */
-}
-
-.dropdown-item {
-  display: block;
-  padding: 0.7rem 1.2rem; /* 패딩 */
-  color: #333; /* 글자색 */
-  text-decoration: none;
-  font-size: 0.9rem;
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  transition: background-color 0.15s ease-in-out;
-  white-space: normal; /* 긴 내용 줄바꿈 */
-  box-sizing: border-box;
-  cursor: pointer;
-}
-
-.dropdown-item:hover:not(.mark-all-read-container) {
-  background-color: #f5f5f5; /* 호버 시 배경색 */
-}
-
-/* 전체 읽음 버튼 컨테이너 */
-.mark-all-read-container {
-  padding: 0.5rem 1.2rem;
-  border-bottom: 1px solid #eee; /* 구분선 */
-}
-
-/* 전체 읽음 버튼 */
-.mark-all-read-btn {
-  background-color: #eee;
-  color: #333;
-  border: none;
-  padding: 0.4rem 0.8rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 500;
-  width: 100%;
-  text-align: center;
-  transition: background-color 0.2s ease;
-}
-.mark-all-read-btn:hover {
-  background-color: #ddd;
-}
-
-/* 알림 아이템 */
 .notification-item {
   display: flex;
-  flex-direction: column; /* 세로 배치 (메시지, 시간) */
-  padding: 0.8rem 1.2rem;
-  border-bottom: 1px solid #f0f0f0; /* 구분선 */
-}
-.notification-item:last-child {
-  border-bottom: none; /* 마지막 아이템 구분선 제거 */
-}
-.notification-item.unread {
-  font-weight: 500; /* 안 읽은 알림 강조 */
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
-/* 안 읽은 알림 표시 (점) */
-.notification-item.unread::before {
-  content: '●';
-  color: #007bff; /* 점 색상 */
-  font-size: 0.7em;
-  margin-right: 8px;
-  vertical-align: middle; /* 수직 정렬 */
-  float: left; /* 왼쪽으로 띄움 */
-  line-height: 1.4; /* 텍스트 줄 높이와 맞춤 */
-  padding-top: 2px; /* 미세 조정 */
+.notification-item:last-child {
+  border-bottom: none;
 }
 
 .notification-item:hover {
-  background-color: #f5f5f5;
+  background-color: #f7fafc;
 }
 
-.notification-item span {
-  margin-bottom: 0.3rem; /* 메시지와 시간 사이 간격 */
-  line-height: 1.4; /* 줄 높이 */
-  word-break: break-word; /* 긴 단어 줄바꿈 */
-}
-.notification-item small {
-  color: #777; /* 시간 색상 */
-  font-size: 0.75rem; /* 시간 글자 크기 */
+.notification-indicator {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #3182ce;
+  margin-top: 6px;
+  margin-right: 12px;
 }
 
-/* 알림 없을 때 메시지 */
-.no-notifications {
-  padding: 1rem 1.2rem;
-  color: #888;
-  text-align: center;
+.notification-text {
+  flex-grow: 1;
+}
+
+.notification-text p {
+  margin: 0 0 4px 0;
   font-size: 0.9rem;
+  color: #2d3748;
+  line-height: 1.5;
 }
 
-/* /알림 드롭다운 상세 */
+.notification-time {
+  font-size: 0.75rem;
+  color: #a0aec0;
+}
 
+.notification-item.unread {
+  background-color: #ebf8ff;
+}
 
-/* 사용자 메뉴 */
+.notification-item.unread:hover {
+  background-color: #e6f0ff;
+}
+
+/* --- 사용자 메뉴 스타일 --- */
 .user-menu {
+  position: relative;
+  z-index: 1001;
+}
+
+.user-menu-button {
   display: flex;
   align-items: center;
-  position: relative; /* PrimeMenu 기준점 */
-  margin-left: 0.5rem; /* 왼쪽 마진 */
-  padding: 0;
-  z-index: 1001; /* 드롭다운이 다른 요소 위에 오도록 */
+  padding: 6px 12px;
+  background-color: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
 }
 
-/* PrimeButton 사용자 정의 (필요시) */
-.user-menu-button {
-  padding: 0.5rem 0.75rem !important; /* PrimeButton 내부 패딩 강제 조정 */
-  /* PrimeVue 기본 스타일 활용 */
+.user-menu-button:hover {
+  background-color: #f5f7fa;
 }
 
-/* /사용자 메뉴 */
-
-
-/* PrimeMenu 팝업 스타일 오버라이드 */
-:deep(.p-menu) {
-  margin-top: 10px !important; /* 버튼과의 간격 */
-  min-width: 180px; /* 최소 너비 */
-}
-:deep(.p-menuitem-link) {
-  padding: 0.7rem 1.2rem; /* 아이템 패딩 */
-  font-size: 0.9rem; /* 아이템 글자 크기 */
-}
-:deep(.p-menuitem-icon) {
-  margin-right: 0.75rem; /* 아이콘 오른쪽 마진 */
-  color: #6c757d; /* 아이콘 색상 */
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-right: 8px;
+  border: 2px solid #e2e8f0;
 }
 
-/* 관리자 메뉴 내 아이콘 (예시) */
-:deep(.p-menuitem-link .fa-ad) {
-  margin-right: 0.5rem;
-  color: #6c757d;
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
-/* /PrimeMenu 팝업 스타일 */
+.username {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #2d3748;
+  margin-right: 4px;
+}
 
+.user-menu-button i {
+  color: #a0aec0;
+  font-size: 0.75rem;
+}
 
-/* 로그인/회원가입 버튼 영역 */
+/* --- 사용자 드롭다운 --- */
+.user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 280px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  z-index: 1000;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #f8fafc;
+}
+
+.user-avatar-large {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-right: 12px;
+  border: 2px solid #e2e8f0;
+}
+
+.user-avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-details h3 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.user-details p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #718096;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.menu-items {
+  padding: 8px 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 0.9rem;
+  color: #4a5568;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-decoration: none;
+}
+
+.menu-item:hover {
+  background-color: #f7fafc;
+}
+
+.menu-item i {
+  width: 20px;
+  margin-right: 12px;
+  color: #718096;
+}
+
+.menu-divider {
+  height: 1px;
+  background-color: #f0f0f0;
+  margin: 8px 0;
+}
+
+.menu-group {
+  padding: 6px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #a0aec0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.menu-item.logout {
+  color: #e53e3e;
+}
+
+.menu-item.logout i {
+  color: #e53e3e;
+}
+
+/* --- 로그인/회원가입 버튼 --- */
 .auth-buttons {
   display: flex;
   align-items: center;
-  gap: 0.75rem; /* 버튼 사이 간격 */
+  gap: 12px;
 }
 
-/* 로그인/회원가입 버튼 공통 스타일 (PrimeButton 사용) */
 .login-button, .signup-button {
-  font-weight: 500;
+  padding: 8px 16px;
   font-size: 0.9rem;
-  border-radius: 4px;
+  font-weight: 500;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  /* PrimeVue 테마 색상 활용 또는 직접 지정 */
 }
 
-/* /로그인/회원가입 버튼 */
+.login-button {
+  background-color: transparent;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
+}
 
+.login-button:hover {
+  background-color: #f5f7fa;
+  border-color: #cbd5e0;
+}
 
-/* 반응형 스타일 (모바일 등 작은 화면) */
+.signup-button {
+  background-color: #3182ce;
+  color: white;
+  border: none;
+}
+
+.signup-button:hover {
+  background-color: #2b6cb0;
+}
+
+/* --- 반응형 스타일 --- */
 @media (max-width: 768px) {
   .container {
-    flex-wrap: wrap; /* 요소 줄바꿈 허용 */
-    justify-content: center; /* 중앙 정렬 */
-    padding: 0 1rem; /* 좌우 패딩 */
+    flex-wrap: wrap;
+    justify-content: space-between;
+    padding: 0 1rem;
   }
+
   .navbar-brand {
-    width: 100%; /* 로고 전체 너비 */
-    text-align: center; /* 로고 중앙 정렬 */
-    margin-bottom: 1rem; /* 아래 마진 */
+    width: auto;
+    text-align: left;
+    margin-bottom: 0;
   }
+
   .search-bar {
-    order: 3; /* 순서 변경 (메뉴 아래로) */
-    max-width: 100%; /* 전체 너비 */
-    margin: 1rem 0 0; /* 위 마진 */
+    order: 3;
+    max-width: 100%;
+    margin: 0.8rem 0 0;
   }
+
   .navbar-menu {
-    order: 2; /* 순서 변경 (검색창 위로) */
-    margin-top: 0.5rem; /* 위 마진 */
-    width: 100%; /* 전체 너비 */
-    justify-content: center; /* 메뉴 중앙 정렬 */
+    order: 2;
+    width: auto;
+    justify-content: flex-end;
   }
-  .user-menu, .notification-menu {
-    margin: 0 0.5rem; /* 좌우 마진 조정 */
+
+  .notification-dropdown {
+    width: 90vw;
+    max-width: 320px;
+    right: -80px;
   }
-  .auth-buttons {
-    width: 100%; /* 전체 너비 */
-    justify-content: center; /* 버튼 중앙 정렬 */
-    margin-top: 0.5rem; /* 위 마진 */
+
+  .user-dropdown {
+    width: 260px;
+    right: -60px;
   }
-  .login-button, .signup-button {
-    flex: 1; /* 가능한 공간 동일하게 차지 */
-    max-width: 120px; /* 최대 너비 */
-    text-align: center; /* 내부 텍스트 중앙 정렬 */
+
+  .username {
+    display: none;
+  }
+
+  .user-menu-button i {
+    display: none;
   }
 }
 
-/* /반응형 스타일 */
+@media (max-width: 480px) {
+  .navbar {
+    padding: 0.6rem 0;
+  }
 
+  .container {
+    padding: 0 0.8rem;
+  }
+
+  .navbar-brand .logo {
+    font-size: 1.4rem;
+  }
+
+  .notification-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .user-avatar {
+    width: 28px;
+    height: 28px;
+    margin-right: 0;
+  }
+
+  .auth-buttons {
+    gap: 8px;
+  }
+
+  .login-button, .signup-button {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+}
 </style>
