@@ -1,5 +1,6 @@
 package com.glowrise.service;
 
+import com.glowrise.domain.Post;
 import com.glowrise.domain.StoredFile;
 import com.glowrise.repository.FileRepository;
 import com.glowrise.service.dto.FileDTO;
@@ -8,17 +9,24 @@ import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.io.UncheckedIOException;
+import java.net.MalformedURLException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -26,11 +34,159 @@ import java.util.*;
 @RequiredArgsConstructor
 @Slf4j
 public class FileService {
+
     private final FileRepository fileRepository;
     private final FileMapper fileMapper;
 
     @Value("${file.upload-dir}")
     private String uploadDirPath;
+
+    @Transactional(readOnly = true)
+    public StoredFile getFileInfo(Long fileId) {
+        return fileRepository.findById(fileId)
+                .orElseThrow(() -> new EntityNotFoundException("파일 정보를 찾을 수 없습니다 (ID): " + fileId));
+    }
+
+    private Resource loadFileAsResourceInternal(StoredFile storedFile) {
+        if (storedFile == null || storedFile.getFilePath() == null) {
+            throw new IllegalArgumentException("파일 정보 또는 파일 경로가 유효하지 않습니다.");
+        }
+        try {
+            Path filePath = Paths.get(storedFile.getFilePath()).normalize();
+            Resource resource = new UrlResource(filePath.toUri());
+            if (resource.exists() && resource.isReadable()) {
+                return resource;
+            } else {
+                log.error("파일 리소스를 찾거나 읽을 수 없음: {}", filePath);
+                throw new RuntimeException("지정된 경로에서 파일을 찾거나 읽을 수 없습니다: " + filePath);
+            }
+        } catch (MalformedURLException ex) {
+            log.error("파일 경로 에러 (Malformed URL): {}", storedFile.getFilePath(), ex);
+            throw new RuntimeException("파일 경로 오류: " + storedFile.getFileName(), ex);
+        } catch (InvalidPathException ex) {
+            log.error("파일 경로 에러 (Invalid Path): {}", storedFile.getFilePath(), ex);
+            throw new RuntimeException("유효하지 않은 파일 경로입니다: " + storedFile.getFileName(), ex);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> getFileResponse(Long fileId) {
+        try {
+            StoredFile fileInfo = getFileInfo(fileId);
+            Resource resource = loadFileAsResourceInternal(fileInfo);
+
+            String contentType = fileInfo.getContentType();
+            if (contentType == null || contentType.isBlank()) {
+                log.warn("DB에 Content-Type 정보가 없습니다 (File ID: {}). 기본값 사용.", fileId);
+                contentType = "application/octet-stream";
+            }
+
+            String originalFileName = fileInfo.getFileName();
+            if (originalFileName == null || originalFileName.isBlank()) {
+                originalFileName = "downloaded_file";
+                log.warn("DB에 원본 파일 이름 정보가 없습니다 (File ID: {}). 기본 파일명 사용.", fileId);
+            }
+
+            String encodedFileName = URLEncoder.encode(originalFileName, StandardCharsets.UTF_8).replaceAll("\\+", "%20");
+            String disposition = "inline; filename=\"" + encodedFileName + "\"; filename*=UTF-8''" + encodedFileName;
+
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                    .body(resource);
+
+        } catch (EntityNotFoundException e) {
+            log.warn("요청된 파일을 찾을 수 없습니다 (ID: {}): {}", fileId, e.getMessage());
+            return ResponseEntity.notFound().build();
+        } catch (RuntimeException e) {
+            log.error("파일 반환 중 서버 오류 발생 (File ID: {}): {}", fileId, e.getMessage());
+            return ResponseEntity.internalServerError().build();
+        } catch (Exception e) {
+            log.error("파일 반환 중 예상치 못한 오류 발생 (File ID: {}): {}", fileId, e);
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+
+    @Transactional
+    public StoredFile saveSingleFile(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            log.warn("업로드 시도된 파일이 null이거나 비어있습니다.");
+            throw new IllegalArgumentException("업로드할 파일이 없습니다.");
+        }
+
+        Path uploadPath = Paths.get(uploadDirPath);
+        Files.createDirectories(uploadPath);
+
+        String originalFilename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename(), "파일 이름이 null입니다."));
+        String extension = StringUtils.getFilenameExtension(originalFilename);
+        String uniqueFilename = UUID.randomUUID().toString() + (extension != null ? "." + extension : "");
+        Path destinationPath = uploadPath.resolve(uniqueFilename).normalize();
+
+        StoredFile savedEntity = null;
+        try {
+            Files.copy(file.getInputStream(), destinationPath, StandardCopyOption.REPLACE_EXISTING);
+            log.info("파일이 디스크에 저장됨: {}", destinationPath);
+
+            StoredFile fileEntity = new StoredFile();
+            fileEntity.setFileName(originalFilename);
+            fileEntity.setFilePath(destinationPath.toString());
+            fileEntity.setContentType(file.getContentType());
+            fileEntity.setFileSize(file.getSize());
+            fileEntity.setPost(null);
+
+            savedEntity = fileRepository.save(fileEntity);
+            log.info("파일 메타데이터 DB 저장됨 (ID: {})", savedEntity.getId());
+
+            return savedEntity;
+
+        } catch (IOException | DataAccessException e) {
+            log.error("파일 업로드 중 오류 발생 (대상 경로: {}). 롤백 시도.", destinationPath, e);
+            try {
+                Files.deleteIfExists(destinationPath);
+                log.info("디스크 파일 생성 롤백됨: {}", destinationPath);
+            } catch (IOException ex) {
+                log.error("롤백 중 디스크 파일 삭제 실패: {}", destinationPath, ex);
+            }
+            throw new RuntimeException("파일 업로드 실패.", e);
+        }
+    }
+
+    @Transactional
+    public void deleteFileById(Long fileId) {
+        if (fileId == null) {
+            log.warn("삭제 요청된 파일 ID가 null입니다.");
+            return;
+        }
+        StoredFile file = getFileInfo(fileId);
+        Path filePath = Paths.get(file.getFilePath());
+        try {
+            boolean deletedFromDisk = Files.deleteIfExists(filePath);
+            if (deletedFromDisk) {
+                log.info("디스크에서 파일 삭제됨: {}", filePath);
+            } else {
+                log.warn("디스크에서 파일을 찾을 수 없거나 이미 삭제됨: {}", filePath);
+            }
+            fileRepository.delete(file);
+            log.info("파일 데이터베이스 항목 삭제됨 (ID: {})", fileId);
+        } catch (IOException e) {
+            log.error("디스크에서 파일 삭제 실패: {}", file.getFilePath(), e);
+            try {
+                fileRepository.delete(file);
+                log.warn("디스크 파일 삭제 실패했으나, DB 레코드 삭제 성공 (ID: {})", fileId);
+            } catch (DataAccessException dae) {
+                log.error("디스크 파일 삭제 실패 후 DB 레코드 삭제 중 오류 발생 (ID: {}): {}", fileId, dae.getMessage());
+            }
+        } catch (DataAccessException e) {
+            log.error("파일 DB 레코드 삭제 중 오류 발생 (ID: {}): {}", fileId, e.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public FileDTO getFileById(Long fileId) {
+        StoredFile storedFile = getFileInfo(fileId);
+        return fileMapper.toDto(storedFile);
+    }
 
     @Transactional
     public List<FileDTO> uploadFiles(List<MultipartFile> multipartFiles, Long postId) throws IOException {
@@ -47,14 +203,10 @@ public class FileService {
             for (MultipartFile file : multipartFiles) {
                 if (file == null || file.isEmpty()) continue;
 
-                String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
-                String extension = "";
-                int dotIndex = originalFilename.lastIndexOf('.');
-                if (dotIndex > 0) {
-                    extension = originalFilename.substring(dotIndex);
-                }
-                String uniqueFilename = UUID.randomUUID().toString() + extension;
-                Path destinationPath = uploadPath.resolve(uniqueFilename);
+                String originalFilename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
+                String extension = StringUtils.getFilenameExtension(originalFilename);
+                String uniqueFilename = UUID.randomUUID().toString() + (extension != null ? "." + extension : "");
+                Path destinationPath = uploadPath.resolve(uniqueFilename).normalize();
 
                 Files.copy(file.getInputStream(), destinationPath, StandardCopyOption.REPLACE_EXISTING);
                 createdFilePaths.add(destinationPath);
@@ -65,7 +217,13 @@ public class FileService {
                 fileEntity.setFilePath(destinationPath.toString());
                 fileEntity.setContentType(file.getContentType());
                 fileEntity.setFileSize(file.getSize());
-                fileEntity.setPost(fileMapper.mapPostIdToPostEntity(postId));
+                try {
+                    Post postReference = fileMapper.mapPostIdToPostEntity(postId);
+                    fileEntity.setPost(postReference);
+                } catch (Exception e) {
+                    log.error("Post 엔티티 참조 설정 중 오류 발생 (Post ID: {})", postId, e);
+                    throw new RuntimeException("게시글 정보 조회 실패 (ID: " + postId + ")", e);
+                }
 
                 savedEntities.add(fileRepository.save(fileEntity));
             }
@@ -82,7 +240,7 @@ public class FileService {
                     log.error("롤백 중 파일 삭제 실패: {}", path, ex);
                 }
             }
-            throw e;
+            throw new RuntimeException("게시글 파일 업로드 실패 (postId: " + postId + ")", e);
         }
     }
 
@@ -98,14 +256,10 @@ public class FileService {
         Path uploadPath = Paths.get(uploadDirPath);
         Files.createDirectories(uploadPath);
 
-        String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "image";
-        String extension = "";
-        int dotIndex = originalFilename.lastIndexOf('.');
-        if (dotIndex > 0) {
-            extension = originalFilename.substring(dotIndex);
-        }
-        String uniqueFilename = UUID.randomUUID().toString() + extension;
-        Path destinationPath = uploadPath.resolve(uniqueFilename);
+        String originalFilename = StringUtils.cleanPath(Objects.requireNonNull(file.getOriginalFilename()));
+        String extension = StringUtils.getFilenameExtension(originalFilename);
+        String uniqueFilename = UUID.randomUUID().toString() + (extension != null ? "." + extension : "");
+        Path destinationPath = uploadPath.resolve(uniqueFilename).normalize();
 
         StoredFile fileEntity = null;
         try {
@@ -123,8 +277,8 @@ public class FileService {
             log.info("에디터 이미지 메타데이터 DB 저장됨 (ID: {}, PostID: null)", fileEntity.getId());
 
             String fileDownloadUri = ServletUriComponentsBuilder.fromCurrentContextPath()
-                    .path("/uploads/")
-                    .path(uniqueFilename)
+                    .path("/api/files/")
+                    .path(String.valueOf(fileEntity.getId()))
                     .toUriString();
 
             log.info("생성된 이미지 URL: {}", fileDownloadUri);
@@ -142,7 +296,7 @@ public class FileService {
             } catch (IOException ex) {
                 log.error("롤백 중 디스크 파일 삭제 실패: {}", destinationPath, ex);
             }
-            throw e;
+            throw new RuntimeException("에디터 이미지 업로드 실패.", e);
         }
     }
 
@@ -177,12 +331,6 @@ public class FileService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public FileDTO getFileById(Long fileId) {
-        return fileRepository.findById(fileId)
-                .map(fileMapper::toDto)
-                .orElseThrow(() -> new EntityNotFoundException("파일을 찾을 수 없습니다 (ID): " + fileId));
-    }
 
     @Transactional(readOnly = true)
     public List<FileDTO> getFilesByPostId(Long postId) {

@@ -5,21 +5,33 @@
       :modal="true"
       :style="{width: '600px'}"
       class="p-fluid"
-      header="광고 관리"
+      :header="isEditing ? '광고 수정' : '광고 등록'"
       @hide="onHide"
   >
     <form ref="adForm" @submit.prevent="saveAdvertisement">
+
       <div class="p-field p-mb-3">
-        <label for="imageUrl">이미지 URL</label>
-        <PrimeInputText id="imageUrl" v-model.trim="advertisement.imageUrl" :class="{'p-invalid': submitted && !advertisement.imageUrl}" autofocus
-                        placeholder="https://example.com/image.jpg"
-                        required/>
-        <small v-if="submitted && !advertisement.imageUrl" class="p-error">이미지 URL을 입력해주세요.</small>
+        <label for="imageFile">광고 이미지</label>
+        <div v-if="isEditing && currentFileUrl" class="p-mb-2">
+          <img :src="currentFileUrl" alt="Current Advertisement Image"
+               style="max-width: 100%; height: auto; max-height: 150px; display: block; border: 1px solid #dee2e6; border-radius: 4px;">
+          <small class="p-d-block p-mt-1">현재 이미지입니다. 새 파일을 업로드하면 교체됩니다.</small>
+        </div>
+        <input id="imageFile" ref="imageFileInput" :class="{'p-invalid': submitted && !hasImage()}" accept="image/*" class="p-inputtext"
+               type="file" @change="handleFileChange">
+        <div v-if="selectedFile" class="p-mt-1 p-d-flex p-ai-center">
+          <span class="p-mr-2">{{ selectedFile.name }}</span>
+          <PrimeButton class="p-button-text p-button-danger p-button-sm" icon="pi pi-times" label="선택 취소"
+                       type="button" @click="resetFileInput"/>
+        </div>
+        <small v-if="submitted && !hasImage()"
+               class="p-error">{{ isEditing ? '새 광고를 등록하거나 기존 이미지를 유지하려면 파일을 비워두세요.' : '이미지 파일을 선택해주세요.' }}</small>
+        <small v-else class="p-d-block p-mt-1">이미지 파일을 선택하세요. (JPG, PNG, GIF 등)</small>
       </div>
 
       <div class="p-field p-mb-3">
-        <label for="targetUrl">클릭 시 이동 URL (선택)</label>
-        <PrimeInputText id="targetUrl" v-model.trim="advertisement.targetUrl"
+        <label for="linkUrl">클릭 시 이동 URL (선택)</label>
+        <PrimeInputText id="linkUrl" v-model.trim="advertisement.linkUrl"
                         placeholder="https://example.com/target-page"/>
       </div>
 
@@ -53,8 +65,8 @@
           />
           <small v-if="submitted && !advertisement.endDate" class="p-error">종료일시를 선택해주세요.</small>
           <small
-              v-if="submitted && advertisement.endDate && advertisement.startDate && advertisement.endDate <= advertisement.startDate"
-              class="p-error">종료일시는 시작일시보다 이후여야 합니다.</small>
+              v-if="advertisement.endDate && advertisement.startDate && advertisement.endDate <= advertisement.startDate"
+              class="p-error p-d-block">종료일시는 시작일시보다 이후여야 합니다.</small>
         </div>
       </div>
 
@@ -77,190 +89,293 @@
       </div>
 
     </form>
-
     <template #footer>
       <PrimeButton class="p-button-text" icon="pi pi-times" label="취소" @click="hideDialog"/>
-      <PrimeButton :loading="isLoading" icon="pi pi-check" label="저장" @click="saveAdvertisement"/>
+      <PrimeButton :label="isEditing ? '수정' : '저장'" :loading="isLoading" icon="pi pi-check" @click="saveAdvertisement"/>
     </template>
 
   </PrimeDialog>
 </template>
 
 <script>
-// import axios from 'axios'; // authService 사용으로 직접 호출 불필요
-import authService from '@/services/authService'; // API 호출 위한 서비스 임포트
-import {mapActions} from 'vuex'; // Vuex 액션 헬퍼 임포트
+// authService 또는 API 호출을 위한 서비스 임포트
+import authService from '@/services/authService';
+import {mapActions} from 'vuex';
 
-// PrimeVue 컴포넌트는 main.js에서 전역 등록됨
-// 로컬 등록 시: import { PrimeDialog, PrimeButton, PrimeInputText, PrimeCalendar, PrimeInputNumber, PrimeCheckbox } from 'primevue/...';
+// PrimeVue 컴포넌트는 전역 등록 가정
+// 필요시 로컬 등록: import { PrimeDialog, PrimeButton, PrimeInputText, PrimeCalendar, PrimeInputNumber, PrimeCheckbox } from 'primevue/...';
 
 export default {
-  name: 'AdvertisementModal', // 컴포넌트 이름
-  // components: { PrimeDialog, PrimeButton, PrimeInputText, ... }, // 로컬 등록 시
+  name: 'AdvertisementModal',
+  // components: { ... }, // 로컬 등록 시
   props: {
-    // 부모 컴포넌트에서 v-model:visible 로 전달받을 prop
+    // 모달 표시 여부 (v-model:visible)
     visible: {
       type: Boolean,
       default: false,
+    },
+    // 수정할 광고 데이터 (수정 모드일 때 전달됨)
+    editAdData: {
+      type: Object,
+      default: null
     }
   },
-  // 부모 컴포넌트로 발생시킬 이벤트 명시 (Vue 3 권장)
-  emits: ['update:visible', 'saved'],
+  emits: ['update:visible', 'saved'], // 부모에게 전달할 이벤트
   data() {
-    // 컴포넌트 내부 데이터 상태
     return {
-      advertisement: this.getDefaultAd(), // 광고 데이터 객체 (초기값 설정)
-      isLoading: false, // 저장 버튼 로딩 상태
+      advertisement: this.getDefaultAd(), // 폼 데이터 객체
+      selectedFile: null, // 선택된 파일 객체
+      currentFileUrl: null, // 수정 시 현재 이미지 URL
+      isLoading: false, // 로딩 상태
       errorMessage: '', // 오류 메시지
-      submitted: false, // 폼 제출 시도 여부 (유효성 검사 표시용)
+      submitted: false, // 폼 제출 시도 여부
     };
   },
   computed: {
-    // v-model:visible 구현을 위한 computed 속성
+    // v-model:visible 구현
     localVisible: {
-      // getter: 부모로부터 받은 visible prop 값 반환
       get() {
         return this.visible;
       },
-      // setter: 내부에서 값이 변경될 때 부모에게 'update:visible' 이벤트 발생
       set(value) {
         this.$emit('update:visible', value);
       }
+    },
+    // 수정 모드인지 여부 판단
+    isEditing() {
+      // editAdData prop이 있고, id 속성이 존재하면 수정 모드로 간주
+      return !!this.editAdData && this.editAdData.id != null;
     }
   },
   methods: {
-    // Vuex 스토어의 'fetchActiveAdvertisements' 액션을 메소드로 매핑
+    // Vuex 액션 매핑 (필요시)
     ...mapActions(['fetchActiveAdvertisements']),
 
-    // 광고 데이터 객체의 기본값을 반환하는 헬퍼 함수
+    // 기본 광고 데이터 반환
     getDefaultAd() {
-      const now = new Date(); // 현재 시간
-      // 7일 후의 날짜 계산
+      const now = new Date();
       const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
       return {
-        imageUrl: '',          // 이미지 URL 초기값
-        targetUrl: '',         // 타겟 URL 초기값
-        startDate: now,        // 시작일시 초기값 (현재)
-        endDate: sevenDaysLater, // 종료일시 초기값 (7일 후)
-        displayOrder: 0,       // 표출 순서 초기값
-        isActive: true,        // 활성화 여부 초기값
+        id: null, // ID는 수정 시에만 설정됨
+        title: '', // 제목 필드가 백엔드에 있다면 추가 필요
+        linkUrl: '',
+        startDate: now,
+        endDate: sevenDaysLater,
+        displayOrder: 0,
+        isActive: true,
+        // fileUrl 은 DTO 매핑 후 설정됨, 여기서는 초기화 불필요
       };
     },
 
-    // '취소' 버튼 클릭 또는 Dialog 외부 클릭 등으로 모달을 닫을 때 호출
+    // 모달 닫기
     hideDialog() {
-      // computed setter를 호출하여 visible 상태 변경 및 이벤트 발생
       this.localVisible = false;
-      // 폼 리셋은 Dialog의 @hide 이벤트에서 처리 (onHide 메소드)
     },
 
-    // PrimeVue Dialog 컴포넌트가 닫힐 때 발생하는 @hide 이벤트 핸들러
+    // Dialog의 @hide 이벤트 핸들러
     onHide() {
-      this.resetForm(); // 폼 상태 초기화
-      // Dialog 내부 메커니즘(ESC, 닫기 아이콘)으로 닫힐 때도
-      // 부모의 상태와 동기화를 확실히 하기 위해 이벤트 발생 (v-model 사용 시 생략 가능)
+      this.resetForm();
+      // v-model 사용 시 이 부분은 중복될 수 있으나 명확성을 위해 유지
       this.$emit('update:visible', false);
     },
 
-    // 폼 데이터 및 관련 상태 초기화 메소드
+    // 폼 및 상태 초기화
     resetForm() {
-      this.advertisement = this.getDefaultAd(); // 광고 데이터 초기화
-      this.isLoading = false;                  // 로딩 상태 해제
-      this.errorMessage = '';                  // 오류 메시지 초기화
-      this.submitted = false;                  // 제출 시도 플래그 초기화
+      this.advertisement = this.getDefaultAd();
+      this.selectedFile = null;
+      this.currentFileUrl = null; // 현재 파일 URL도 초기화
+      this.isLoading = false;
+      this.errorMessage = '';
+      this.submitted = false;
+      // 파일 입력 DOM 요소 직접 초기화 (선택 해제 시 필요)
+      if (this.$refs.imageFileInput) {
+        this.$refs.imageFileInput.value = '';
+      }
     },
 
-    // JavaScript Date 객체를 ISO 8601 형식 문자열로 변환하는 헬퍼 함수
-    // (백엔드의 LocalDateTime 형식에 맞게 'Z' 없이 로컬 시간 기준)
+    // 파일 입력 변경 핸들러
+    handleFileChange(event) {
+      const file = event.target.files[0];
+      if (file) {
+        this.selectedFile = file;
+        // 이미지 미리보기 로직 (필요시 추가)
+      } else {
+        this.selectedFile = null;
+      }
+    },
+
+    // 파일 입력 필드 초기화 (선택 취소 버튼 클릭 시)
+    resetFileInput() {
+      this.selectedFile = null;
+      if (this.$refs.imageFileInput) {
+        this.$refs.imageFileInput.value = '';
+      }
+    },
+
+    // 이미지 존재 여부 확인 (유효성 검사용)
+    hasImage() {
+      // 수정 모드에서는 기존 이미지가 있거나 새 파일을 선택한 경우 true
+      if (this.isEditing) {
+        return !!this.currentFileUrl || !!this.selectedFile;
+      }
+      // 생성 모드에서는 새 파일을 선택한 경우 true
+      return !!this.selectedFile;
+    },
+
+    // Date 객체를 ISO 8601 문자열 (백엔드 LocalDateTime 호환)로 변환
     formatDateToISO(date) {
-      if (!date) return null; // 날짜 객체가 없으면 null 반환
-      // 타임존 오프셋 계산 (분 단위 -> 밀리초 단위)
-      const tzoffset = (new Date()).getTimezoneOffset() * 60000;
-      // 로컬 시간 기준으로 ISO 문자열 생성 후 마지막 'Z' 제거
-      const localISOTime = (new Date(date.getTime() - tzoffset)).toISOString().slice(0, -1);
-      return localISOTime;
+      if (!date) return null;
+      try {
+        // 타임존 오프셋 고려하여 로컬 시간 기준 ISO 문자열 생성 (UTC 'Z' 제거)
+        const tzoffset = date.getTimezoneOffset() * 60000;
+        const localISOTime = new Date(date.getTime() - tzoffset).toISOString().slice(0, -1);
+        // 초(second) 단위까지만 포함 (밀리초 제거)
+        return localISOTime.split('.')[0];
+      } catch (e) {
+        console.error("날짜 변환 오류:", e);
+        return null; // 오류 발생 시 null 반환
+      }
     },
 
-    // 폼 제출 전 유효성 검사 메소드
+    // 폼 유효성 검사
     validateForm() {
-      this.submitted = true; // 유효성 검사 메시지 표시 트리거
-      // 필수 필드 값 존재 여부 확인
-      if (!this.advertisement.imageUrl || !this.advertisement.startDate || !this.advertisement.endDate || this.advertisement.displayOrder === null) {
-        this.errorMessage = '필수 입력 항목을 확인해주세요.';
-        return false; // 유효성 검사 실패
+      this.submitted = true;
+      let isValid = true;
+
+      // 필수 필드: 이미지 (생성 시 필수, 수정 시 선택적)
+      if (!this.isEditing && !this.selectedFile) {
+        this.errorMessage = '광고 이미지를 선택해주세요.';
+        isValid = false;
       }
-      // 종료일시가 시작일시보다 이후인지 확인
-      if (this.advertisement.endDate <= this.advertisement.startDate) {
-        this.errorMessage = '종료일시는 시작일시보다 이후여야 합니다.';
-        return false; // 유효성 검사 실패
+      // 필수 필드: 시작일시, 종료일시, 표시순서
+      if (!this.advertisement.startDate || !this.advertisement.endDate || this.advertisement.displayOrder === null) {
+        if (isValid) this.errorMessage = '필수 입력 항목(기간, 순서)을 확인해주세요.';
+        isValid = false;
       }
-      this.errorMessage = ''; // 모든 검사 통과 시 오류 메시지 초기화
-      return true; // 유효성 검사 성공
+      // 날짜 순서 검사
+      if (this.advertisement.endDate && this.advertisement.startDate && this.advertisement.endDate <= this.advertisement.startDate) {
+        if (isValid) this.errorMessage = '종료일시는 시작일시보다 이후여야 합니다.';
+        isValid = false;
+      }
+
+      if (isValid) {
+        this.errorMessage = ''; // 모든 검사 통과
+      }
+      return isValid;
     },
 
-    // '저장' 버튼 클릭 시 실행되는 메소드
+    // 광고 저장 또는 수정
     async saveAdvertisement() {
-      // 폼 유효성 검사 실행
       if (!this.validateForm()) {
-        // 유효성 검사 실패 시 Toast 메시지 표시
         this.$toast.add({severity: 'warn', summary: '입력 오류', detail: this.errorMessage || '폼 입력을 확인해주세요.', life: 3000});
-        return; // 저장 중단
+        return;
       }
 
-      this.isLoading = true; // 로딩 상태 활성화
-      this.errorMessage = ''; // 오류 메시지 초기화
+      this.isLoading = true;
+      this.errorMessage = '';
 
-      // 서버로 전송할 페이로드(payload) 준비
-      const payload = {
-        ...this.advertisement, // 현재 폼 데이터 복사
-        startDate: this.formatDateToISO(this.advertisement.startDate), // 시작일시 ISO 형식 변환
-        endDate: this.formatDateToISO(this.advertisement.endDate),     // 종료일시 ISO 형식 변환
-        // targetUrl이 비어있으면 null 또는 빈 문자열로 설정 (백엔드 요구사항 확인)
-        targetUrl: this.advertisement.targetUrl || null
+      // FormData 객체 생성
+      const formData = new FormData();
+
+      // DTO 데이터 준비 (파일 제외)
+      const adData = {
+        // id는 수정 시 URL 경로로 전달되므로 페이로드에선 제외 가능하나, 백엔드 설계에 따라 포함될 수도 있음
+        // id: this.advertisement.id,
+        title: this.advertisement.title || '', // 제목 필드가 있다면 추가
+        linkUrl: this.advertisement.linkUrl || null,
+        displayOrder: this.advertisement.displayOrder,
+        isActive: this.advertisement.isActive,
+        startDate: this.formatDateToISO(this.advertisement.startDate),
+        endDate: this.formatDateToISO(this.advertisement.endDate),
       };
 
+      // FormData에 DTO 데이터를 JSON 문자열 Blob으로 추가
+      formData.append('advertisement', new Blob([JSON.stringify(adData)], {type: 'application/json'}));
+
+      // 선택된 파일이 있으면 FormData에 추가
+      if (this.selectedFile) {
+        formData.append('imageFile', this.selectedFile, this.selectedFile.name);
+      }
+
       try {
-        console.log('광고 저장 API 호출. 페이로드:', payload);
-        // authService를 통해 광고 생성 API 호출
-        await authService.createAdvertisement(payload);
+        let response;
+        if (this.isEditing) {
+          // 수정 API 호출 (PUT)
+          console.log(`광고 수정 API 호출 (ID: ${this.advertisement.id}). 페이로드:`, adData, "파일:", this.selectedFile ? this.selectedFile.name : "변경 없음");
+          response = await authService.updateAdvertisement(this.advertisement.id, formData);
+        } else {
+          // 생성 API 호출 (POST)
+          console.log('광고 생성 API 호출. 페이로드:', adData, "파일:", this.selectedFile ? this.selectedFile.name : "없음");
+          response = await authService.createAdvertisementFormData(formData); // FormData 받는 메소드 호출
+        }
 
-        // API 호출 성공 후, Vuex 액션을 호출하여 메인 광고 목록 갱신
-        await this.fetchActiveAdvertisements();
+        console.log("API 응답:", response);
 
-        // 부모 컴포넌트에 'saved' 이벤트 전달 (성공 처리 위임)
-        this.$emit('saved');
+        // 메인 목록 갱신 (필요시)
+        // await this.fetchActiveAdvertisements();
 
-        this.hideDialog(); // 성공적으로 저장 후 모달 닫기
+        this.$emit('saved'); // 부모에게 저장 완료 이벤트 전달
+        this.hideDialog(); // 모달 닫기
+        this.$toast.add({
+          severity: 'success',
+          summary: '성공',
+          detail: `광고가 성공적으로 ${this.isEditing ? '수정' : '등록'}되었습니다.`,
+          life: 3000
+        });
 
       } catch (error) {
-        // API 호출 실패 시 오류 처리
-        console.error("광고 생성 실패:", error.response || error);
-        this.errorMessage = '광고 생성 중 오류가 발생했습니다.';
-        // 백엔드에서 전달된 구체적인 오류 메시지가 있다면 사용
+        console.error(`광고 ${this.isEditing ? '수정' : '생성'} 실패:`, error.response || error);
+        this.errorMessage = `광고 ${this.isEditing ? '수정' : '생성'} 중 오류가 발생했습니다.`;
         if (error.response && error.response.data) {
           this.errorMessage = error.response.data.message || error.response.data.detail || this.errorMessage;
         }
-        // 사용자에게 Toast 메시지로 오류 알림
         this.$toast.add({severity: 'error', summary: '저장 실패', detail: this.errorMessage, life: 5000});
       } finally {
-        // API 호출 완료 후 (성공/실패 관계없이) 로딩 상태 해제
         this.isLoading = false;
       }
+    },
+
+    // 수정 모드일 때 폼 데이터 채우기
+    populateFormForEdit(data) {
+      if (!data) return;
+      // 전달받은 데이터로 폼 필드 설정 (깊은 복사 또는 필요한 필드만 복사)
+      this.advertisement = {
+        ...this.getDefaultAd(), // 기본값으로 시작
+        id: data.id,
+        title: data.title || '', // 제목 필드가 있다면 사용
+        linkUrl: data.linkUrl,
+        displayOrder: data.displayOrder,
+        isActive: data.isActive,
+        // 날짜는 ISO 문자열로 오므로 Date 객체로 변환 필요
+        startDate: data.startDate ? new Date(data.startDate) : null,
+        endDate: data.endDate ? new Date(data.endDate) : null,
+      };
+      this.currentFileUrl = data.fileUrl || null; // 기존 파일 URL 설정
+      this.selectedFile = null; // 수정 시작 시 새 파일 선택은 초기화
+      this.submitted = false; // 유효성 검사 상태 초기화
+      this.errorMessage = ''; // 오류 메시지 초기화
     }
   },
   watch: {
-    // 부모로부터 받은 visible prop 값이 변경될 때 감지
+    // visible prop 변경 감지
     visible(newVal) {
-      // 모달이 새로 열릴 때(true) 폼 상태 초기화
       if (newVal) {
-        this.resetForm();
+        // 모달이 열릴 때
+        if (this.isEditing) {
+          // 수정 모드이면 전달된 데이터로 폼 채우기
+          this.populateFormForEdit(this.editAdData);
+        } else {
+          // 생성 모드이면 폼 초기화
+          this.resetForm();
+        }
       }
+      // 닫힐 때는 onHide에서 resetForm 호출됨
     },
-    // 시작일시 값이 변경될 때 감지 (선택적 UX 개선)
-    'advertisement.startDate'(newStartDate) {
-      // 종료일시가 있고, 시작일시도 있으며, 종료일시가 시작일시보다 이전일 경우
-      if (this.advertisement.endDate && newStartDate && this.advertisement.endDate < newStartDate) {
-        // 종료일시를 시작일시와 동일하게 설정 (사용자가 직접 이후 날짜로 변경해야 함)
+
+    // 시작일시 변경 감지 (UX 개선)
+    'advertisement.startDate'(newStartDate, oldStartDate) {
+      // oldStartDate 체크 추가하여 초기 로딩 시 불필요한 변경 방지
+      if (oldStartDate && this.advertisement.endDate && newStartDate && this.advertisement.endDate < newStartDate) {
         this.advertisement.endDate = new Date(newStartDate.getTime());
       }
     }
@@ -269,29 +384,37 @@ export default {
 </script>
 
 <style scoped>
-/* PrimeFlex 유틸리티 클래스 (p-field, p-mb-3, p-grid, p-col-*, p-error 등) 활용 */
+/* PrimeFlex 유틸리티 클래스 사용 */
 
-/* 폼 필드 라벨 스타일 */
 .p-field label {
   font-weight: bold;
   display: block;
   margin-bottom: 0.5rem;
 }
 
-/* 체크박스와 라벨 정렬 */
+/* 파일 입력 컨트롤 스타일 (기본 input 사용 시) */
+input[type="file"].p-inputtext {
+  /* PrimeInputText와 유사하게 보이도록 약간의 스타일 조정 가능 */
+  border: 1px solid #ced4da;
+  padding: 0.75rem;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input[type="file"].p-inputtext.p-invalid {
+  border-color: #e24c4c;
+}
+
 .p-field .p-d-flex label {
-  margin-bottom: 0; /* 기본 라벨 마진 제거 */
+  margin-bottom: 0;
 }
 
-/* PrimeVue v3 Dialog 푸터 버튼 간격 스타일 */
 .p-dialog .p-dialog-footer button {
-  margin-left: 0.5rem; /* 왼쪽 버튼과의 간격 */
+  margin-left: 0.5rem;
 }
 
-/* 첫 번째 버튼은 왼쪽 마진 없음 */
 .p-dialog .p-dialog-footer button:first-child {
   margin-left: 0;
 }
-
-/* 필요하다면 다른 커스텀 스타일 추가 */
 </style>

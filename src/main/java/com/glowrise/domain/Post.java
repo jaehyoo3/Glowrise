@@ -3,13 +3,17 @@ package com.glowrise.domain;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.ToString;
 
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "post")
+@Table(name = "post", indexes = {
+        @Index(name = "idx_post_title", columnList = "title")
+})
 @Getter
+@ToString(exclude = {"comments", "menu"})
 @Setter
 public class Post extends AbstractAuditingEntity<Long> {
 

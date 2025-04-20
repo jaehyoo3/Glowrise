@@ -10,12 +10,9 @@
             type="text"
             placeholder="검색"
             v-model="searchQuery"
-            @keyup.enter="handleSearch"
-        />
-        <button class="search-button" @click="handleSearch">
-          <i class="fas fa-search"></i></button>
+            @keyup.enter="handleSearch"/>
+        <button class="search-button" @click="handleSearch"><i class="fas fa-search"></i></button>
       </div>
-
       <div class="navbar-menu">
         <template v-if="isLoggedIn">
           <div class="notification-menu" @click.stop="toggleNotificationDropdown">
@@ -43,7 +40,6 @@
               </div>
             </div>
           </div>
-
           <div class="user-menu">
             <PrimeButton
                 :label="displayNicknameOrUsername"
@@ -56,7 +52,6 @@
             <PrimeMenu id="overlay_menu" ref="userMenuRef" :model="userMenuItems" :popup="true"/>
           </div>
         </template>
-
         <template v-else>
           <div class="auth-buttons">
             <PrimeButton class="signup-button p-button-sm" label="회원가입" @click="openSignupModal"/>
@@ -75,7 +70,6 @@
         @profile-completed="handleAuthSuccess"/>
 
     <AdvertisementModal v-model:visible="isAdModalVisible" @saved="handleAdSaved"/>
-
   </div>
 </template>
 
@@ -89,77 +83,58 @@ import {websocketService} from '@/services/websocketService';
 import LoginSignupModal from '@/components/LoginSignupModal.vue';
 import AdvertisementModal from '@/components/admin/AdvertisementModal.vue';
 
-// PrimeVue 컴포넌트는 main.js에서 전역 등록 ('PrimeButton', 'PrimeMenu' 등)
+// PrimeVue 컴포넌트는 main.js에서 전역 등록됨을 가정
 
 export default {
-  name: 'NavBar', // 컴포넌트 이름
+  name: 'NavBar',
   components: {
-    LoginSignupModal, // 로그인/회원가입 모달 등록
-    AdvertisementModal // 광고 생성 모달 등록
+    LoginSignupModal,
+    AdvertisementModal
   },
   data() {
-    // 컴포넌트 내부 데이터 상태
     return {
-      searchQuery: '', // 검색어
-      // showUserDropdown: false, // PrimeMenu 사용으로 제거
-      showNotificationDropdown: false, // 알림 드롭다운 표시 여부
-      isLoggingOut: false, // 로그아웃 진행 중 상태
-      notifications: [], // 알림 목록 배열
-      unreadCount: 0, // 안 읽은 알림 개수
-      showLoginModal: false, // 로그인/회원가입 모달 표시 여부
-      modalInitialTab: 'login', // 모달 초기 탭
-      oauthCompletionDataForModal: null, // OAuth 프로필 완성 데이터
-      isAdModalVisible: false, // 광고 생성 모달 표시 여부
+      searchQuery: '', // 검색어 바인딩
+      showNotificationDropdown: false,
+      isLoggingOut: false,
+      notifications: [],
+      unreadCount: 0,
+      showLoginModal: false,
+      modalInitialTab: 'login',
+      oauthCompletionDataForModal: null,
+      isAdModalVisible: false,
     };
   },
   computed: {
-    // Vuex 상태 매핑 (필요 시)
-    ...mapState([
-      // 예: 'someOtherState'
-    ]),
-    // Vuex 게터 매핑
+    // Vuex 상태 및 게터 매핑
+    ...mapState([]), // 필요시 상태 추가
     ...mapGetters([
-      'isLoggedIn',       // 로그인 여부
-      'userId',           // 사용자 ID
-      'username',         // 사용자 이름 (아이디)
-      'nickName',         // 사용자 닉네임
-      'userEmail',        // 사용자 이메일
-      'userProfileImage', // 사용자 프로필 이미지 URL
-      'blogUrl',          // 사용자 블로그 URL
-      'hasBlog',          // 사용자 블로그 존재 여부
-      'isLoading',        // 로딩 상태 (전체)
-      'isAdmin'           // 관리자 여부
+      'isLoggedIn', 'userId', 'username', 'nickName', 'userEmail',
+      'userProfileImage', 'blogUrl', 'hasBlog', 'isLoading', 'isAdmin'
     ]),
-    // 표시할 프로필 이미지 URL 계산
     displayProfileImage() {
-      // 사용자 프로필 이미지가 없으면 기본 이미지 경로 반환
-      return this.userProfileImage || '/img/default-profile.png'; // 기본 이미지 경로 확인 필요
+      return this.userProfileImage || '/img/default-profile.png';
     },
-    // 표시할 닉네임 또는 사용자 이름 계산
     displayNicknameOrUsername() {
-      return this.nickName || this.username || '사용자'; // 닉네임 > 이름 > 기본값 순서
+      return this.nickName || this.username || '사용자';
     },
-    // PrimeMenu 컴포넌트에 전달할 메뉴 아이템 모델 (동적 생성)
     userMenuItems() {
-      let items = []; // 빈 배열로 시작
-
-      // 블로그 소유 여부에 따라 '내 블로그' 또는 '블로그 만들기'/'닉네임 설정' 메뉴 추가
+      let items = [];
       if (this.hasBlog) {
         items.push({
           label: '내 블로그',
-          icon: 'pi pi-fw pi-home', // PrimeIcon 사용
+          icon: 'pi pi-fw pi-home',
           command: () => this.$router.push(`/${this.blogUrl}`).catch(() => {
-          }) // 네비게이션 오류 무시
+          })
         });
       } else {
-        if (this.nickName) { // 닉네임이 있어야 블로그 생성 가능
+        if (this.nickName) {
           items.push({
             label: '블로그 만들기',
             icon: 'pi pi-fw pi-plus',
             command: () => this.$router.push('/blog/create').catch(() => {
             })
           });
-        } else { // 닉네임 없으면 설정 유도
+        } else {
           items.push({
             label: '닉네임 설정하기',
             icon: 'pi pi-fw pi-user-plus',
@@ -167,360 +142,263 @@ export default {
           });
         }
       }
-
-      // '내 정보 수정' 메뉴 추가
       items.push({
         label: '내 정보 수정',
         icon: 'pi pi-fw pi-user-edit',
         command: () => this.$router.push('/profile/edit').catch(() => {
         })
       });
-
-      // 관리자(isAdmin)일 경우 '관리자 메뉴' 및 하위 '광고 생성' 메뉴 추가
       if (this.isAdmin) {
-        items.push({
-          separator: true // 구분선
-        }, {
-          label: '관리자 메뉴',
-          icon: 'pi pi-fw pi-cog', // 설정 아이콘
-          items: [ // 하위 메뉴 배열
+        items.push({separator: true}, {
+          label: '관리자 메뉴', icon: 'pi pi-fw pi-cog',
+          items: [
             {
-              label: '사용자 관리',
-              icon: 'pi pi-fw pi-users',
-              command: () => this.$router.push('/admin/users').catch(() => {
-              }) // 사용자 관리 페이지 경로 (예시)
-            },
-            {
-              label: '광고 생성',
-              icon: 'pi pi-fw pi-plus-circle', // 생성 아이콘
-              command: () => this.openCreateAdModal() // 광고 생성 모달 열기 함수 호출
-            },
-            // 여기에 다른 관리자 메뉴 항목 추가 가능
+              label: '사용자 관리', icon: 'pi pi-fw pi-users', command: () => this.$router.push('/admin/users').catch(() => {
+              })
+            }, // 경로 확인
+            {label: '광고 생성', icon: 'pi pi-fw pi-plus-circle', command: () => this.openCreateAdModal()},
           ]
         });
       }
-
-      // 구분선 추가
       items.push({separator: true});
-      // '로그아웃' 메뉴 추가
-      items.push({
-        label: '로그아웃',
-        icon: 'pi pi-fw pi-power-off',
-        command: () => this.handleLogout() // 로그아웃 함수 호출
-      });
-
-      // 최종 생성된 메뉴 아이템 배열 반환
+      items.push({label: '로그아웃', icon: 'pi pi-fw pi-power-off', command: () => this.handleLogout()});
       return items;
     }
   },
   watch: {
-    // 로그인 상태 변경 감지 (oldValue 파라미터 제거)
     isLoggedIn(newValue) {
-      if (newValue) { // 로그인 시
-        this.fetchNotifications(); // 알림 가져오기
-        this.connectWebSocket(); // 웹소켓 연결
-      } else { // 로그아웃 시
-        this.notifications = []; // 알림 목록 초기화
-        this.unreadCount = 0; // 안 읽은 개수 초기화
-        if (websocketService) websocketService.disconnect(); // 웹소켓 연결 해제
+      if (newValue) {
+        this.fetchNotifications();
+        this.connectWebSocket();
+      } else {
+        this.notifications = [];
+        this.unreadCount = 0;
+        if (websocketService) websocketService.disconnect();
       }
     }
   },
   mounted() {
-    // 컴포넌트 마운트 시 외부 클릭 감지 리스너 추가
     document.addEventListener('click', this.handleOutsideClick);
   },
   beforeUnmount() {
-    // 컴포넌트 파괴 전 리스너 제거 및 웹소켓 연결 해제
     document.removeEventListener('click', this.handleOutsideClick);
     if (websocketService) websocketService.disconnect();
   },
   created() {
-    // 컴포넌트 생성 시 OAuth 프로필 완성 필요 여부 확인
     this.checkOAuthCompletionOnLoad();
-    // 로그인 상태면 초기 데이터 로드
     if (this.isLoggedIn) {
       this.fetchNotifications();
       this.connectWebSocket();
     }
   },
   methods: {
-    // Vuex 액션 매핑
-    ...mapActions(['fetchCurrentUser', 'logoutAndClear']), // 실제 스토어 액션 이름 확인
+    ...mapActions(['fetchCurrentUser', 'logoutAndClear']),
 
-    // 외부 영역 클릭 시 드롭다운 닫기 처리
     handleOutsideClick(event) {
-      // PrimeMenu는 자체적으로 외부 클릭 시 닫히므로 사용자 메뉴 관련 로직 불필요
       const notificationMenu = this.$el.querySelector('.notification-menu');
-      let clickedInsideNotificationMenu = notificationMenu?.contains(event.target);
-
-      // 알림 메뉴 외부 클릭 시 알림 드롭다운 닫기
-      if (!clickedInsideNotificationMenu) {
+      if (notificationMenu && !notificationMenu.contains(event.target)) {
         this.showNotificationDropdown = false;
       }
+      // PrimeMenu는 자체 처리
     },
-    // PrimeMenu 토글 (사용자 메뉴 버튼 클릭 시)
     toggleUserMenu(event) {
-      // ref를 통해 PrimeMenu 컴포넌트의 toggle 메소드 호출
       this.$refs.userMenuRef.toggle(event);
-      // 사용자 메뉴 열리면 알림 메뉴 닫기
-      this.showNotificationDropdown = false;
+      this.showNotificationDropdown = false; // 사용자 메뉴 열 때 알림 닫기
     },
-    // 알림 드롭다운 토글
     toggleNotificationDropdown() {
       this.showNotificationDropdown = !this.showNotificationDropdown;
-      // 알림 드롭다운 열리면 사용자 메뉴(PrimeMenu) 닫기 (필요 시)
-      if (this.showNotificationDropdown && this.$refs.userMenuRef) {
-        // PrimeMenu의 hide() 메소드가 있다면 호출하여 닫을 수 있으나,
-        // 보통 다른 영역 클릭 시 자동으로 닫히므로 필수는 아님.
-        // this.$refs.userMenuRef.hide();
-      }
-      // 알림 드롭다운 열 때 최신 알림 정보 가져오기
+      // 알림 메뉴 열 때 사용자 메뉴 닫기 (PrimeMenu API 확인 필요, 보통 외부 클릭으로 닫힘)
+      // if (this.showNotificationDropdown && this.$refs.userMenuRef?.visible) {
+      //   this.$refs.userMenuRef.hide();
+      // }
       if (this.showNotificationDropdown && this.isLoggedIn) {
-        this.fetchNotifications();
+        this.fetchNotifications(); // 열 때마다 최신 정보 로드
       }
     },
-    // 모든 드롭다운 닫기 (주로 메뉴 아이템 클릭 시 호출)
     closeDropdown() {
-      // PrimeMenu는 아이템 클릭 시 자동으로 닫힐 수 있음
       this.showNotificationDropdown = false;
     },
-    // 알림 목록 가져오기 메소드 (전체 코드)
     async fetchNotifications() {
-      if (!this.isLoggedIn) return; // 로그인 상태 아니면 실행 중단
+      if (!this.isLoggedIn) return;
       try {
-        const fetchedNotifications = await authService.getNotifications(); // API 호출
-        // isRead 필드 boolean 변환 및 날짜 역순 정렬
+        const fetchedNotifications = await authService.getNotifications();
         this.notifications = fetchedNotifications.map(n => ({
-          ...n, // 기존 알림 데이터 복사
-          // API 응답의 read 필드 타입에 따라 boolean으로 변환 (문자열 'true'/'false'도 처리)
+          ...n,
           isRead: typeof n.read === 'boolean' ? n.read : String(n.read).toLowerCase() === 'true'
-        })).sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate)); // 최신순 정렬
-
-        // 안 읽은 알림 개수 계산
+        })).sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
         this.unreadCount = this.notifications.filter(n => !n.isRead).length;
       } catch (error) {
         console.error('NavBar: 알림 가져오기 실패:', error);
-        this.notifications = []; // 오류 시 초기화
-        this.unreadCount = 0; // 오류 시 초기화
+        this.notifications = [];
+        this.unreadCount = 0;
       }
     },
-    // 웹소켓 연결 메소드 (전체 코드)
     connectWebSocket() {
-      // 로그인 상태 및 사용자 ID 확인
       if (!this.isLoggedIn || !this.userId) return;
-      // 기존 연결이 있다면 해제
       if (websocketService) websocketService.disconnect();
-      // 새 웹소켓 연결 시도 (사용자 ID와 콜백 함수 전달)
       websocketService.connect(this.userId, (notification) => {
-        // 새 알림 수신 시 처리 로직
-        // 이미 목록에 없는 알림인지 확인
         if (!this.notifications.some(n => n.id === notification.id)) {
-          // 새 알림 객체 생성 (isRead 필드 처리 포함)
           const newNotification = {
             ...notification,
             isRead: typeof notification.read === 'boolean' ? notification.read : String(notification.read).toLowerCase() === 'true'
           };
-          this.notifications.unshift(newNotification); // 목록 맨 앞에 추가
-          this.notifications.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate)); // 최신순 재정렬
-          // 안 읽은 알림이면 카운트 증가
+          this.notifications.unshift(newNotification);
+          this.notifications.sort((a, b) => new Date(b.createdDate) - new Date(a.createdDate));
           if (!newNotification.isRead) {
             this.unreadCount += 1;
           }
-          // 새 알림 수신 시 Toast 메시지로 사용자에게 알림
           this.$toast.add({severity: 'info', summary: '새 알림', detail: notification.message, life: 5000});
         }
       });
     },
-    // 알림 아이템 클릭 시 처리 메소드 (전체 코드)
     async handleNotificationClick(notification) {
-      // 유효한 알림 객체인지 확인
       if (!notification || !notification.id) return;
       try {
-        // 안 읽은 알림일 경우 서버에 읽음 처리 요청
         if (!notification.isRead) {
           await authService.markNotificationAsRead(notification.id);
-          // 로컬 상태 즉시 업데이트 (UI 반응성)
           const targetNotification = this.notifications.find(n => n.id === notification.id);
           if (targetNotification) {
-            targetNotification.isRead = true; // 읽음 상태로 변경
+            targetNotification.isRead = true;
           }
-          this.unreadCount = Math.max(0, this.unreadCount - 1); // 안 읽은 카운트 감소
+          this.unreadCount = Math.max(0, this.unreadCount - 1);
         }
-
-        // 알림에 연결된 URL 정보가 있으면 해당 글로 이동
         if (notification.blogUrl && notification.menuId && notification.postId) {
           const targetPath = `/${notification.blogUrl}/${notification.menuId}/${notification.postId}`;
           this.$router.push(targetPath).catch(() => {
-          }); // 중복 네비게이션 오류는 무시
+          });
         }
-        this.closeDropdown(); // 알림 클릭 후 드롭다운 닫기
+        this.closeDropdown();
       } catch (error) {
         console.error('NavBar: 알림 처리 실패:', error);
-        // 오류 발생 시 사용자에게 Toast 메시지로 알림
-        this.$toast.add({severity: 'error', summary: '오류', detail: '알림 처리 중 오류가 발생했습니다.', life: 3000});
+        this.$toast.add({severity: 'error', summary: '오류', detail: '알림 처리 중 오류', life: 3000});
       }
     },
-    // '전체 읽음' 버튼 클릭 시 처리 메소드 (전체 코드)
     async handleMarkAllRead() {
-      // 안 읽은 알림이 없으면 실행 중단
       if (this.unreadCount === 0) return;
       try {
-        // 서버에 모든 알림 읽음 처리 요청
         await authService.markAllNotificationsAsRead();
-        // 로컬 상태 즉시 업데이트
-        this.notifications.forEach(n => n.isRead = true); // 모든 알림을 읽음 상태로 변경
-        this.unreadCount = 0; // 안 읽은 카운트 0으로 설정
-        // 성공 메시지 표시
-        this.$toast.add({severity: 'success', summary: '알림', detail: '모든 알림을 읽음 처리했습니다.', life: 3000});
-        // this.closeDropdown(); // 필요 시 드롭다운 닫기
-
+        this.notifications.forEach(n => n.isRead = true);
+        this.unreadCount = 0;
+        this.$toast.add({severity: 'success', summary: '알림', detail: '모든 알림 읽음 처리 완료', life: 3000});
       } catch (error) {
         console.error('NavBar: 전체 알림 읽음 처리 실패:', error);
-        // 오류 메시지 표시
-        this.$toast.add({severity: 'error', summary: '오류', detail: '전체 알림 읽음 처리 중 오류가 발생했습니다.', life: 3000});
+        this.$toast.add({severity: 'error', summary: '오류', detail: '전체 알림 읽음 처리 중 오류', life: 3000});
       }
     },
-    // 날짜 포맷팅 함수 (상대 시간 표시) (전체 코드)
-    formatDate(dateString) {
-      if (!dateString) return ''; // 날짜 문자열 없으면 빈 문자열 반환
+    formatDate(dateString) { // 상대 시간 포맷 함수
+      if (!dateString) return '';
       try {
-        const date = new Date(dateString); // Date 객체 생성
-        const now = new Date(); // 현재 시간
-        // 시간 차이 계산 (초, 분, 시간, 일)
+        const date = new Date(dateString);
+        const now = new Date();
         const diffSeconds = Math.round((now - date) / 1000);
         const diffMinutes = Math.round(diffSeconds / 60);
         const diffHours = Math.round(diffMinutes / 60);
         const diffDays = Math.round(diffHours / 24);
-
-        // 시간 차이에 따라 다른 형식으로 반환
         if (diffSeconds < 60) return `${diffSeconds}초 전`;
         if (diffMinutes < 60) return `${diffMinutes}분 전`;
         if (diffHours < 24) return `${diffHours}시간 전`;
         if (diffDays < 7) return `${diffDays}일 전`;
-        return date.toLocaleDateString('ko-KR'); // 7일 이상이면 'YYYY. MM. DD.' 형식
+        return date.toLocaleDateString('ko-KR');
       } catch (e) {
-        // 날짜 파싱 오류 시 원본 문자열 반환
         return dateString;
       }
     },
-    // 로그아웃 처리 함수 (전체 코드)
     async handleLogout() {
-      this.isLoggingOut = true; // 로그아웃 진행 중 상태 활성화
+      this.isLoggingOut = true;
       try {
-        // Vuex의 logoutAndClear 액션 호출 (비동기)
         await this.logoutAndClear();
-        // 로그아웃 성공 시 전역 이벤트 발생 (다른 컴포넌트 알림용, 필요시)
         window.dispatchEvent(new CustomEvent('auth-state-changed'));
-        // 현재 경로가 홈('/')이 아니면 홈으로 이동
         if (this.$route.path !== '/') {
           this.$router.push('/').catch(() => {
-          }); // 중복 네비게이션 오류 무시
+          });
         }
-        // 로그아웃 성공 Toast 메시지
-        this.$toast.add({severity: 'info', summary: '로그아웃', detail: '로그아웃 되었습니다.', life: 3000});
+        this.$toast.add({severity: 'info', summary: '로그아웃', detail: '로그아웃 완료', life: 3000});
       } catch (error) {
-        // 로그아웃 실패 시 오류 처리
         console.error("NavBar: 로그아웃 오류", error);
-        this.$toast.add({severity: 'error', summary: '오류', detail: '로그아웃 처리 중 오류가 발생했습니다.', life: 3000});
+        this.$toast.add({severity: 'error', summary: '오류', detail: '로그아웃 처리 중 오류', life: 3000});
       } finally {
-        // 로그아웃 처리 완료 후 로딩 상태 해제
         this.isLoggingOut = false;
-        // this.closeDropdown(); // PrimeMenu 사용 시 드롭다운 자동 닫힘 가능성 있음
-      }
-    },
-    // 검색 처리 함수 (전체 코드)
-    handleSearch() {
-      const query = this.searchQuery.trim(); // 입력값 앞뒤 공백 제거
-      if (query) { // 검색어가 있을 경우
-        // 검색 결과 페이지로 이동 (쿼리 파라미터 포함)
-        this.$router.push({path: '/search', query: {q: query}}).catch(() => {
-        }); // 실제 검색 페이지 경로 확인
-        this.searchQuery = ''; // 검색창 비우기
-      }
-    },
-    // 페이지 로드 시 OAuth 프로필 완성 필요 여부 확인 함수 (전체 코드)
-    checkOAuthCompletionOnLoad() {
-      // 세션 스토리지에서 관련 데이터 확인
-      const completionDataString = sessionStorage.getItem('oauth_profile_completion');
-      if (completionDataString) { // 데이터가 있으면
-        try {
-          // JSON 파싱하여 모달 데이터 설정
-          this.oauthCompletionDataForModal = JSON.parse(completionDataString);
-          this.modalInitialTab = 'signup'; // 회원가입 탭(프로필 완성 폼 있는 곳)으로 설정
-          this.showLoginModal = true; // 로그인/회원가입 모달 열기
-          sessionStorage.removeItem('oauth_profile_completion'); // 데이터 사용 후 제거
-        } catch (e) {
-          // 파싱 오류 시 데이터 제거
-          sessionStorage.removeItem('oauth_profile_completion');
-          this.oauthCompletionDataForModal = null;
-        }
-      } else { // 데이터 없으면 null 설정
-        this.oauthCompletionDataForModal = null;
-      }
-    },
-    // 로그인 모달 열기 함수 (전체 코드)
-    openLoginModal() {
-      this.oauthCompletionDataForModal = null; // OAuth 데이터 초기화
-      this.modalInitialTab = 'login'; // 로그인 탭으로 시작
-      this.showLoginModal = true;
-    },
-    // 회원가입 모달 열기 함수 (전체 코드)
-    openSignupModal() {
-      this.oauthCompletionDataForModal = null; // OAuth 데이터 초기화
-      this.modalInitialTab = 'signup'; // 회원가입 탭으로 시작
-      this.showLoginModal = true;
-    },
-    // 닉네임 설정 (프로필 완성) 모달 열기 함수 (전체 코드)
-    openProfileCompletionModal() {
-      // 모달에 전달할 데이터 설정 (현재 사용자 이메일, 이름 등)
-      this.oauthCompletionDataForModal = {
-        email: this.userEmail, // Vuex 게터 사용
-        oauthName: this.username // Vuex 게터 사용 (OAuth 이름으로 username 사용 가정)
-      };
-      this.modalInitialTab = 'signup'; // 회원가입 탭 (내부에 프로필 완성 폼 가정)
-      this.showLoginModal = true;
-      // this.closeDropdown(); // PrimeMenu 사용 시 불필요
-    },
-    // 로그인/회원가입 모달 닫기 함수 (전체 코드)
-    closeLoginModal() {
-      this.showLoginModal = false;
-      this.oauthCompletionDataForModal = null; // 관련 데이터 초기화
-    },
-    // 로그인/회원가입/프로필 완성 성공 시 후처리 함수 (전체 코드)
-    async handleAuthSuccess() {
-      this.closeLoginModal(); // 모달 닫기
-      try {
-        // 최신 사용자 정보 다시 가져오기 (상태 업데이트)
-        await this.fetchCurrentUser();
-        window.dispatchEvent(new CustomEvent('auth-state-changed')); // 전역 이벤트 발생 (필요시)
-      } catch (error) {
-        console.error("NavBar: 인증 성공 후 사용자 정보 가져오기 오류:", error);
       }
     },
 
-    // --- 광고 생성 모달 여는 메소드 ---
-    openCreateAdModal() {
-      this.isAdModalVisible = true; // 광고 모달 표시 상태 true
-      // this.closeDropdown(); // PrimeMenu 사용 시 자동으로 닫힐 수 있음
+    // ***** 수정된 검색 처리 함수 *****
+    handleSearch() {
+      const query = this.searchQuery.trim(); // 입력된 검색어 가져오기
+      if (query) { // 검색어가 있으면
+        // '/search' 경로로 이동, 쿼리 파라미터 'q'에 검색어 전달
+        this.$router.push({name: 'search', query: {q: query}})
+            .catch(err => { // 네비게이션 오류 처리 (옵션)
+              if (err.name !== 'NavigationDuplicated' && !err.message.includes('Avoided redundant navigation')) {
+                console.error('Search navigation error:', err);
+              }
+            });
+        // 검색 후 입력창 비우기 (선택 사항)
+        // this.searchQuery = '';
+      }
+      // 검색어가 없으면 아무 동작 안함 (또는 알림 표시)
     },
-    // --- 광고 생성 모달 저장 완료 시 처리 메소드 ---
+    // ***** /수정된 검색 처리 함수 *****
+
+    checkOAuthCompletionOnLoad() {
+      const completionDataString = sessionStorage.getItem('oauth_profile_completion');
+      if (completionDataString) {
+        try {
+          this.oauthCompletionDataForModal = JSON.parse(completionDataString);
+          this.modalInitialTab = 'signup';
+          this.showLoginModal = true;
+          sessionStorage.removeItem('oauth_profile_completion');
+        } catch (e) {
+          sessionStorage.removeItem('oauth_profile_completion');
+          this.oauthCompletionDataForModal = null;
+        }
+      } else {
+        this.oauthCompletionDataForModal = null;
+      }
+    },
+    openLoginModal() {
+      this.oauthCompletionDataForModal = null;
+      this.modalInitialTab = 'login';
+      this.showLoginModal = true;
+    },
+    openSignupModal() {
+      this.oauthCompletionDataForModal = null;
+      this.modalInitialTab = 'signup';
+      this.showLoginModal = true;
+    },
+    openProfileCompletionModal() {
+      this.oauthCompletionDataForModal = {email: this.userEmail, oauthName: this.username};
+      this.modalInitialTab = 'signup';
+      this.showLoginModal = true;
+    },
+    closeLoginModal() {
+      this.showLoginModal = false;
+      this.oauthCompletionDataForModal = null;
+    },
+    async handleAuthSuccess() {
+      this.closeLoginModal();
+      try {
+        await this.fetchCurrentUser();
+        window.dispatchEvent(new CustomEvent('auth-state-changed'));
+      } catch (error) {
+        console.error("NavBar: 인증 성공 후 사용자 정보 로드 오류:", error);
+      }
+    },
+    openCreateAdModal() {
+      this.isAdModalVisible = true;
+    },
     handleAdSaved() {
-      // isAdModalVisible = false; // v-model:visible 사용으로 부모에서 직접 변경 불필요
-      // 저장 성공 Toast 메시지 표시
-      this.$toast.add({severity: 'success', summary: '성공', detail: '광고가 성공적으로 생성되었습니다.', life: 3000});
+      this.$toast.add({severity: 'success', summary: '성공', detail: '광고 생성 완료', life: 3000});
     }
-    // --- ---
   }
 };
 </script>
 
 <style scoped>
-/* --- 전체 스타일 코드는 이전 답변과 동일하게 유지 --- */
+/* --- 전체 스타일 코드 --- */
 .navbar {
   background-color: white;
   border-bottom: 1px solid #e0e0e0;
-  padding: 1rem 0;
+  padding: 1rem 0; /* 상하 패딩 조정 */
   position: sticky;
   top: 0;
   z-index: 1000;
@@ -528,121 +406,132 @@ export default {
 }
 
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: 1200px; /* 콘텐츠 최대 너비 */
+  margin: 0 auto; /* 중앙 정렬 */
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 1.5rem;
-  box-sizing: border-box;
+  align-items: center; /* 수직 중앙 정렬 */
+  justify-content: space-between; /* 요소 간 공간 분배 */
+  padding: 0 1.5rem; /* 좌우 패딩 */
+  box-sizing: border-box; /* 패딩 포함 너비 계산 */
 }
 
 .navbar-brand .logo {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: #000;
-  text-decoration: none;
-  letter-spacing: -0.5px;
+  font-size: 1.75rem; /* 로고 크기 */
+  font-weight: 700; /* 로고 두께 */
+  color: #000; /* 로고 색상 */
+  text-decoration: none; /* 밑줄 제거 */
+  letter-spacing: -0.5px; /* 글자 간격 */
 }
 
+/* 검색창 스타일 */
 .search-bar {
-  flex-grow: 1;
-  max-width: 450px;
-  position: relative;
-  margin: 0 2rem;
+  flex-grow: 1; /* 가능한 공간 차지 */
+  max-width: 450px; /* 최대 너비 제한 */
+  position: relative; /* 버튼 위치 기준 */
+  margin: 0 2rem; /* 좌우 마진 */
 }
 
 .search-bar input {
-  width: 100%;
-  padding: 0.6rem 2.5rem 0.6rem 1rem;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  background-color: #f8f9fa;
-  box-sizing: border-box;
-  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  width: 100%; /* 부모 요소 너비 채움 */
+  padding: 0.6rem 2.5rem 0.6rem 1rem; /* 패딩 (오른쪽은 아이콘 공간 확보) */
+  border: 1px solid #e0e0e0; /* 테두리 */
+  border-radius: 4px; /* 모서리 둥글게 */
+  font-size: 0.9rem; /* 글자 크기 */
+  background-color: #f8f9fa; /* 배경색 */
+  box-sizing: border-box; /* 패딩/테두리 포함 너비 계산 */
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* 부드러운 전환 효과 */
 }
 
 .search-bar input:focus {
-  border-color: #333;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
-  outline: none;
+  border-color: #333; /* 포커스 시 테두리 색상 */
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1); /* 포커스 시 그림자 효과 */
+  outline: none; /* 기본 아웃라인 제거 */
 }
 
 .search-button {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  border: none;
-  background: none;
-  color: #666;
-  cursor: pointer;
-  padding: 5px;
+  position: absolute; /* 절대 위치 */
+  right: 10px; /* 오른쪽 끝에서 10px */
+  top: 50%; /* 수직 중앙 */
+  transform: translateY(-50%); /* 정확한 수직 중앙 정렬 */
+  border: none; /* 테두리 없음 */
+  background: none; /* 배경 없음 */
+  color: #666; /* 아이콘 색상 */
+  cursor: pointer; /* 마우스 커서 포인터 */
+  padding: 5px; /* 클릭 영역 확보 */
 }
 
+/* /검색창 스타일 */
+
+/* 메뉴 영역 */
 .navbar-menu {
   display: flex;
   align-items: center;
 }
 
+/* 알림 메뉴 */
 .notification-menu {
   display: flex;
   align-items: center;
   cursor: pointer;
-  position: relative;
-  margin-right: 1.5rem;
+  position: relative; /* 드롭다운 기준 */
+  margin-right: 1.5rem; /* 오른쪽 마진 */
   padding: 5px;
-  z-index: 1001;
+  z-index: 1001; /* 드롭다운이 다른 요소 위에 오도록 */
 }
 
 .notification-menu i.fa-bell {
-  font-size: 1.3rem;
-  color: #333;
+  font-size: 1.3rem; /* 아이콘 크기 */
+  color: #333; /* 아이콘 색상 */
 }
 
 .notification-badge {
-  position: absolute;
-  top: -6px;
-  right: -8px;
-  background-color: #333;
-  color: white;
-  border-radius: 50%;
-  padding: 2px 5px;
-  font-size: 0.7rem;
-  font-weight: 500;
-  line-height: 1;
-  min-width: 16px;
-  text-align: center;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+  position: absolute; /* 절대 위치 */
+  top: -6px; /* 위치 조정 */
+  right: -8px; /* 위치 조정 */
+  background-color: #333; /* 배경색 */
+  color: white; /* 글자색 */
+  border-radius: 50%; /* 원형 */
+  padding: 2px 5px; /* 내부 패딩 */
+  font-size: 0.7rem; /* 글자 크기 */
+  font-weight: 500; /* 글자 두께 */
+  line-height: 1; /* 줄 높이 */
+  min-width: 16px; /* 최소 너비 */
+  text-align: center; /* 중앙 정렬 */
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.3); /* 그림자 */
 }
 
+/* /알림 메뉴 */
+
+/* 드롭다운 메뉴 공통 */
 .dropdown-menu {
   position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
+  top: calc(100% + 10px); /* 부모 요소 아래 + 간격 */
+  right: 0; /* 오른쪽 정렬 */
   background-color: white;
   border: 1px solid #e0e0e0;
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  min-width: 160px;
-  padding: 0.5rem 0;
-  z-index: 1000;
+  min-width: 160px; /* 최소 너비 */
+  padding: 0.5rem 0; /* 상하 패딩 */
+  z-index: 1000; /* 다른 요소 위 */
   display: block;
   list-style: none;
   margin: 0;
 }
 
+/* /드롭다운 메뉴 공통 */
+
+/* 알림 드롭다운 상세 */
 .notification-dropdown {
-  width: 300px;
-  max-height: 400px;
-  overflow-y: auto;
+  width: 300px; /* 너비 */
+  max-height: 400px; /* 최대 높이 */
+  overflow-y: auto; /* 내용 많으면 스크롤 */
 }
 
 .dropdown-item {
   display: block;
-  padding: 0.7rem 1.2rem;
-  color: #333;
+  padding: 0.7rem 1.2rem; /* 패딩 */
+  color: #333; /* 글자색 */
   text-decoration: none;
   font-size: 0.9rem;
   background: none;
@@ -650,20 +539,22 @@ export default {
   width: 100%;
   text-align: left;
   transition: background-color 0.15s ease-in-out;
-  white-space: normal;
+  white-space: normal; /* 긴 내용 줄바꿈 */
   box-sizing: border-box;
   cursor: pointer;
 }
 
 .dropdown-item:hover:not(.mark-all-read-container) {
-  background-color: #f5f5f5;
+  background-color: #f5f5f5; /* 호버 시 배경색 */
 }
 
+/* 전체 읽음 버튼 컨테이너 */
 .mark-all-read-container {
   padding: 0.5rem 1.2rem;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #eee; /* 구분선 */
 }
 
+/* 전체 읽음 버튼 */
 .mark-all-read-btn {
   background-color: #eee;
   color: #333;
@@ -677,50 +568,51 @@ export default {
   text-align: center;
   transition: background-color 0.2s ease;
 }
-
 .mark-all-read-btn:hover {
   background-color: #ddd;
 }
 
+/* 알림 아이템 */
 .notification-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: column; /* 세로 배치 (메시지, 시간) */
   padding: 0.8rem 1.2rem;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0; /* 구분선 */
 }
-
 .notification-item:last-child {
-  border-bottom: none;
+  border-bottom: none; /* 마지막 아이템 구분선 제거 */
 }
-
 .notification-item.unread {
-  font-weight: 500;
+  font-weight: 500; /* 안 읽은 알림 강조 */
 }
 
+/* 안 읽은 알림 표시 (점) */
 .notification-item.unread::before {
   content: '●';
-  color: #007bff;
+  color: #007bff; /* 점 색상 */
   font-size: 0.7em;
   margin-right: 8px;
-  vertical-align: middle;
+  vertical-align: middle; /* 수직 정렬 */
+  float: left; /* 왼쪽으로 띄움 */
+  line-height: 1.4; /* 텍스트 줄 높이와 맞춤 */
+  padding-top: 2px; /* 미세 조정 */
 }
 
 .notification-item:hover {
   background-color: #f5f5f5;
 }
 
-
 .notification-item span {
-  margin-bottom: 0.3rem;
-  line-height: 1.4;
-  word-break: break-word;
+  margin-bottom: 0.3rem; /* 메시지와 시간 사이 간격 */
+  line-height: 1.4; /* 줄 높이 */
+  word-break: break-word; /* 긴 단어 줄바꿈 */
 }
-
 .notification-item small {
-  color: #777;
-  font-size: 0.75rem;
+  color: #777; /* 시간 색상 */
+  font-size: 0.75rem; /* 시간 글자 크기 */
 }
 
+/* 알림 없을 때 메시지 */
 .no-notifications {
   padding: 1rem 1.2rem;
   color: #888;
@@ -728,97 +620,109 @@ export default {
   font-size: 0.9rem;
 }
 
+/* /알림 드롭다운 상세 */
+
+
+/* 사용자 메뉴 */
 .user-menu {
   display: flex;
   align-items: center;
-  position: relative;
-  margin-left: 0.5rem;
+  position: relative; /* PrimeMenu 기준점 */
+  margin-left: 0.5rem; /* 왼쪽 마진 */
   padding: 0;
-  z-index: 1001;
+  z-index: 1001; /* 드롭다운이 다른 요소 위에 오도록 */
 }
 
+/* PrimeButton 사용자 정의 (필요시) */
 .user-menu-button {
-  padding: 0.5rem 0.75rem !important; /* PrimeButton 패딩 조정 */
-  /* color: #495057; */ /* PrimeButton 기본 스타일 활용 */
+  padding: 0.5rem 0.75rem !important; /* PrimeButton 내부 패딩 강제 조정 */
+  /* PrimeVue 기본 스타일 활용 */
 }
 
-/* 기존 .user-name, .fa-chevron-down 스타일 불필요 */
+/* /사용자 메뉴 */
 
-/* PrimeMenu 스타일 커스터마이징 */
+
+/* PrimeMenu 팝업 스타일 오버라이드 */
 :deep(.p-menu) {
-  margin-top: 10px !important; /* 버튼 아래 간격 */
-  min-width: 180px; /* 메뉴 최소 너비 */
+  margin-top: 10px !important; /* 버튼과의 간격 */
+  min-width: 180px; /* 최소 너비 */
 }
-
 :deep(.p-menuitem-link) {
-  padding: 0.7rem 1.2rem; /* 아이템 패딩 조정 */
-  font-size: 0.9rem; /* 폰트 크기 조정 */
+  padding: 0.7rem 1.2rem; /* 아이템 패딩 */
+  font-size: 0.9rem; /* 아이템 글자 크기 */
 }
-
 :deep(.p-menuitem-icon) {
-  margin-right: 0.75rem; /* 아이콘과 텍스트 간격 */
-  color: #6c757d; /* 아이콘 기본 색상 */
+  margin-right: 0.75rem; /* 아이콘 오른쪽 마진 */
+  color: #6c757d; /* 아이콘 색상 */
 }
 
-/* 관리자 메뉴 아이콘 스타일 */
+/* 관리자 메뉴 내 아이콘 (예시) */
 :deep(.p-menuitem-link .fa-ad) {
   margin-right: 0.5rem;
   color: #6c757d;
 }
 
+/* /PrimeMenu 팝업 스타일 */
+
+
+/* 로그인/회원가입 버튼 영역 */
 .auth-buttons {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.75rem; /* 버튼 사이 간격 */
 }
 
+/* 로그인/회원가입 버튼 공통 스타일 (PrimeButton 사용) */
 .login-button, .signup-button {
   font-weight: 500;
   font-size: 0.9rem;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
+  /* PrimeVue 테마 색상 활용 또는 직접 지정 */
 }
 
-/* PrimeButton 클래스로 스타일 제어 */
-/* .login-button { ... } */
-/* .signup-button { ... } */
+/* /로그인/회원가입 버튼 */
 
 
+/* 반응형 스타일 (모바일 등 작은 화면) */
 @media (max-width: 768px) {
   .container {
-    flex-wrap: wrap;
-    justify-content: center;
-    padding: 0 1rem;
+    flex-wrap: wrap; /* 요소 줄바꿈 허용 */
+    justify-content: center; /* 중앙 정렬 */
+    padding: 0 1rem; /* 좌우 패딩 */
   }
   .navbar-brand {
-    width: 100%;
-    text-align: center;
-    margin-bottom: 1rem;
+    width: 100%; /* 로고 전체 너비 */
+    text-align: center; /* 로고 중앙 정렬 */
+    margin-bottom: 1rem; /* 아래 마진 */
   }
   .search-bar {
-    order: 3;
-    max-width: 100%;
-    margin: 1rem 0 0;
+    order: 3; /* 순서 변경 (메뉴 아래로) */
+    max-width: 100%; /* 전체 너비 */
+    margin: 1rem 0 0; /* 위 마진 */
   }
   .navbar-menu {
-    order: 2;
-    margin-top: 0.5rem;
-    width: 100%;
-    justify-content: center;
+    order: 2; /* 순서 변경 (검색창 위로) */
+    margin-top: 0.5rem; /* 위 마진 */
+    width: 100%; /* 전체 너비 */
+    justify-content: center; /* 메뉴 중앙 정렬 */
   }
   .user-menu, .notification-menu {
-    margin: 0 0.5rem;
+    margin: 0 0.5rem; /* 좌우 마진 조정 */
   }
   .auth-buttons {
-    width: 100%;
-    justify-content: center;
-    margin-top: 0.5rem;
+    width: 100%; /* 전체 너비 */
+    justify-content: center; /* 버튼 중앙 정렬 */
+    margin-top: 0.5rem; /* 위 마진 */
   }
   .login-button, .signup-button {
-    flex: 1;
-    max-width: 120px;
-    text-align: center;
+    flex: 1; /* 가능한 공간 동일하게 차지 */
+    max-width: 120px; /* 최대 너비 */
+    text-align: center; /* 내부 텍스트 중앙 정렬 */
   }
 }
+
+/* /반응형 스타일 */
+
 </style>

@@ -15,6 +15,7 @@ public class PostDTO {
     private Long id;
     private String title;
     private String content;
+    private String contentSnippet;
     private Long menuId;
     private Long userId;
     private Long commentCount;

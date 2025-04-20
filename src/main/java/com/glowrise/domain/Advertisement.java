@@ -11,27 +11,30 @@ import java.time.LocalDateTime;
 @Getter
 @Setter
 public class Advertisement extends AbstractAuditingEntity<Long> {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "image_url", nullable = false)
-    private String imageUrl;
+    @Column(nullable = false)
+    private String title;
 
-    @Column(name = "target_url")
-    private String targetUrl;
+    @Column(name = "link_url", length = 1024)
+    private String linkUrl;
 
-    @Column(name = "start_date", nullable = false)
-    private LocalDateTime startDate;
+    @Column(nullable = false)
+    private int displayOrder;
 
-    @Column(name = "end_date", nullable = false)
-    private LocalDateTime endDate;
+    @Column(nullable = false)
+    private boolean active = true; // 광고 활성 상태
 
-    @Column(name = "display_order", nullable = false, columnDefinition = "INT DEFAULT 0")
-    private Integer displayOrder = 0;
+    @OneToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "stored_file_id", referencedColumnName = "id")
+    private StoredFile imageFile; // 광고 이미지 파일
 
-    @Column(name = "is_active", nullable = false, columnDefinition = "BOOLEAN DEFAULT true")
-    private Boolean isActive = true;
+    @Column(name = "start_date", nullable = false) // DB 컬럼명 'start_date', NOT NULL 가정
+    private LocalDateTime startDate; // 타입: LocalDateTime
+
+    @Column(name = "end_date", nullable = false)   // DB 컬럼명 'end_date', NOT NULL 가정
+    private LocalDateTime endDate;   // 타입: LocalDateTime
 
 }

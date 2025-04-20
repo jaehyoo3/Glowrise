@@ -7,6 +7,7 @@
           <p class="site-description">Create, Share, Inspire</p>
         </div>
 
+        <main-advertisement/>
         <div class="main-grid">
           <div class="blog-overview">
             <h2>Welcome to Glowrise</h2>
@@ -100,59 +101,49 @@
 </template>
 
 <script>
-import {mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
-import authService from '@/services/authService'; // 인기글 로딩 등 직접 API 호출용
+import {mapGetters} from 'vuex';
+import authService from '@/services/authService';
+// ===== 광고 컴포넌트 임포트 =====
+import MainAdvertisement from '@/components/MainAdvertisement.vue'; // 경로 확인 필요
 
 export default {
   name: 'HomeView',
-  // NavBar는 App.vue 등 상위에서 관리한다고 가정
-  // components: { NavBar },
+  // ===== 광고 컴포넌트 등록 =====
+  components: {
+    MainAdvertisement // 등록
+  },
   data() {
     return {
-      // --- 로컬 상태 제거: blog, isLoggedIn, userNickname ---
-      // --- isLoading은 스토어 getter(isLoading) 또는 컴포넌트 자체 로딩(isPostsLoading)으로 대체 ---
-      popularPosts: [],        // 인기글 목록 (로컬 상태 유지)
-      isPostsLoading: true,    // 인기글 로딩 상태 (로컬 상태 유지)
-      selectedPeriod: 'WEEKLY',// 인기글 기간 (로컬 상태 유지)
+      popularPosts: [],
+      isPostsLoading: true,
+      selectedPeriod: 'WEEKLY',
     };
   },
   computed: {
-    // --- Vuex Getters/State 매핑 ---
     ...mapGetters([
-      'isLoggedIn',       // 로그인 여부
-      'nickName',         // 닉네임 (표시용)
-      'username',         // 사용자 이름 (닉네임 없을 때 대비)
-      'hasBlog',          // 블로그 소유 여부
-      'blogUrl',          // 사용자 블로그 URL
-      'isLoadingUser',    // 스토어의 사용자 정보 로딩 상태
-      'isLoadingBlog',     // 스토어의 블로그 정보 로딩 상태
-      'blogId',           // 사용자 블로그 ID getter
-      'blogTitle',        // 사용자 블로그 제목 getter
+      'isLoggedIn',
+      'nickName',
+      'username',
+      'hasBlog',
+      'blogUrl',
+      'isLoadingUser',
+      'isLoadingBlog',
+      'blogId',
+      'blogTitle',
     ]),
-    // 스토어 상태 직접 매핑 (필요한 경우)
-    // ...mapState(['currentUser', 'userBlog']),
-
-    // 닉네임 또는 사용자 이름 표시
     displayNicknameOrUsername() {
       return this.nickName || this.username;
     },
-    // 사이드바 로딩 상태 (스토어 로딩 상태 조합)
     isSidebarLoading() {
       return this.isLoadingUser || this.isLoadingBlog;
     }
-    // ---------------------------
   },
-  // --- 삭제: created 내부의 loadBlogAndCheckLogin 호출 ---
-  // --- 삭제: mounted, beforeUnmount, handleAuthChange (이벤트 리스너 관련) ---
-  // --- mounted 또는 created 에서 인기글 로딩 시작 ---
   async mounted() {
     console.log("HomeView: mounted hook. 인기글 로드 시작.");
     await this.loadPopularPosts();
+    // HomeView에서 광고 로드를 직접 트리거할 필요는 없음 (MainAdvertisement에서 처리)
   },
   methods: {
-    // --- 삭제: loadBlogAndCheckLogin 메서드 ---
-
-    // 인기글 로딩 메서드 (기존과 동일, authService 직접 사용)
     async loadPopularPosts() {
       console.log(`HomeView: 인기글 로드 중 (${this.selectedPeriod})`);
       this.isPostsLoading = true;
@@ -173,8 +164,6 @@ export default {
         this.isPostsLoading = false;
       }
     },
-
-    // --- 나머지 메서드 (truncateContent, formatDate, navigateToPost, changeTimePeriod)는 기존과 동일 ---
     truncateContent(content) {
       if (!content) return '';
       const textContent = content.replace(/<[^>]*>/g, '');
@@ -196,7 +185,7 @@ export default {
     navigateToPost(post) {
       if (post && post.blogUrl && post.menuId && post.id) {
         const path = `/${post.blogUrl}/${post.menuId}/${post.id}`;
-        this.$router.push(path).catch({ /* ... */});
+        this.$router.push(path).catch({ /* navigation duplicate handling */});
       } else {
         console.warn("HomeView: 포스트 네비게이션 정보 부족.", post);
       }
@@ -210,6 +199,7 @@ export default {
   }
 };
 </script>
+
 <style scoped>
 /* --- 기본 레이아웃 및 컨테이너 --- */
 .home {
@@ -280,10 +270,8 @@ export default {
 }
 
 .blog-overview h2 {
-  font-size: 1.6rem;
+  font-size: 1.6rem; /* Welcome 메시지 약간 더 크게 */
 }
-
-/* Welcome 메시지 약간 더 크게 */
 
 
 /* --- 버튼 스타일 --- */
@@ -472,7 +460,9 @@ export default {
 /* --- 반응형 조정 --- */
 @media (max-width: 992px) {
   .main-grid {
-    grid-template-columns: 3fr 2fr;
+    /* 컬럼 너비 비율 조정 가능 */
+    grid-template-columns: 1fr; /* 992px 이하에서도 1열로 변경 (선택 사항) */
+    /* 또는 grid-template-columns: 3fr 2fr; 유지 */
   }
 }
 
@@ -485,7 +475,7 @@ export default {
     padding: 3rem 0;
   }
   .main-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr; /* 작은 화면에서는 무조건 1열 */
     gap: 2rem;
   }
 
@@ -493,20 +483,20 @@ export default {
     padding: 1.8rem;
   }
 
+  /* 모바일에서 요소 순서 재정의 필요시 */
   .blog-overview {
-    order: 1;
+    order: 1; /* 기본 순서 */
   }
-
   .blog-sidebar {
-    order: 2;
+    order: 2; /* 기본 순서 */
   }
 
   .posts-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr; /* 모바일에서는 항상 1열 카드 */
   }
 
   .time-period-filter {
-    justify-content: center;
+    justify-content: center; /* 모바일에서는 필터 버튼 가운데 정렬 */
   }
 }
 </style>

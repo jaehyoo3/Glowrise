@@ -328,22 +328,59 @@ const authService = {
     },
 
     // --- 광고 관련 API 함수 ---
+    // 활성화된 광고 목록 조회
     getActiveAdvertisements: async () => {
         try {
+            // GET /api/advertisements/active 엔드포인트 사용
             const response = await apiClient.get('/api/advertisements/active');
             return response.data;
         } catch (error) {
             console.error("Error fetching active advertisements:", error);
-            throw error; // 오류를 호출한 곳으로 전파
+            throw error;
         }
     },
-    createAdvertisement: async (advertisementData) => {
+
+    // [수정] 광고 생성 API (FormData 사용)
+    createAdvertisementFormData: async (formData) => { // 함수 이름 수정 및 추가
         try {
-            // 광고 생성 API 호출 (/api/admin/advertisements 엔드포인트 확인 필요)
-            const response = await apiClient.post('/api/admin/advertisements', advertisementData);
-            return response.data;
+            // POST /api/advertisements 엔드포인트 사용 (AdvertisementController에 정의된 경로)
+            const response = await apiClient.post('/api/advertisements', formData, {
+                headers: {
+                    // 'Content-Type': 'multipart/form-data' // Axios가 FormData 사용 시 자동으로 설정하므로 명시적 설정은 보통 불필요
+                }
+            });
+            return response.data; // 생성된 광고 DTO 반환 예상
         } catch (error) {
-            console.error("Error creating advertisement:", error);
+            console.error("Error creating advertisement with FormData:", error);
+            throw error; // 오류 전파
+        }
+    },
+
+    // [추가] 광고 수정 API (FormData 사용)
+    updateAdvertisement: async (id, formData) => {
+        try {
+            // PUT /api/advertisements/{id} 엔드포인트 사용 (AdvertisementController에 정의된 경로)
+            const response = await apiClient.put(`/api/advertisements/${id}`, formData, {
+                headers: {
+                    // 'Content-Type': 'multipart/form-data' // 자동 설정
+                }
+            });
+            return response.data; // 수정된 광고 DTO 반환 예상
+        } catch (error) {
+            console.error(`Error updating advertisement ${id} with FormData:`, error);
+            throw error; // 오류 전파
+        }
+    },
+
+    // [추가] 광고 삭제 API (필요시)
+    deleteAdvertisement: async (id) => {
+        try {
+            // DELETE /api/advertisements/{id} 엔드포인트 사용 (AdvertisementController에 정의된 경로)
+            const response = await apiClient.delete(`/api/advertisements/${id}`);
+            // 성공 시 204 No Content 응답이 올 수 있음
+            return response.status === 204 ? {} : response.data;
+        } catch (error) {
+            console.error(`Error deleting advertisement ${id}:`, error);
             throw error;
         }
     },
