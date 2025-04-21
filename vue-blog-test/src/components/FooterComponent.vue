@@ -50,7 +50,7 @@ export default {
   padding: 2.5rem 0 1.5rem;
   color: #666;
   font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
-  margin-top: 3rem;
+  margin-top: 1rem;
 }
 
 .footer-container {

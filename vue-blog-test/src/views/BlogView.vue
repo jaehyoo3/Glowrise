@@ -2,21 +2,30 @@
   <div class="blog-view">
     <div class="container">
       <div v-if="isLoading" class="loading-state">
+        <div class="spinner"></div>
         <span>로딩 중...</span>
       </div>
       <div v-else-if="blog" class="blog-content">
         <div class="main-grid">
           <div class="blog-menu">
-            <h3>메뉴</h3>
+            <div class="blog-menu-header">
+              <h3>메뉴</h3>
+            </div>
             <ul class="menu-list">
               <li class="menu-item">
-                <router-link :to="`/${blog.url}`">전체글 보기</router-link>
+                <router-link :to="`/${blog.url}`" class="menu-link">
+                  <span class="menu-text">전체글 보기</span>
+                </router-link>
               </li>
               <li v-for="menu in rootMenus" :key="menu.id" class="menu-item">
-                <router-link :to="`/${blog.url}/${menu.id}`">{{ menu.name }}</router-link>
+                <router-link :to="`/${blog.url}/${menu.id}`" class="menu-link">
+                  <span class="menu-text">{{ menu.name }}</span>
+                </router-link>
                 <ul v-if="getSubMenus(menu.id).length > 0" class="submenu-list">
                   <li v-for="submenu in getSubMenus(menu.id)" :key="submenu.id" class="submenu-item">
-                    <router-link :to="`/${blog.url}/${submenu.id}`">{{ submenu.name }}</router-link>
+                    <router-link :to="`/${blog.url}/${submenu.id}`" class="submenu-link">
+                      <span class="submenu-text">{{ submenu.name }}</span>
+                    </router-link>
                   </li>
                 </ul>
               </li>
@@ -41,32 +50,37 @@
                   {{ selectedMenu ? selectedMenu.name : '전체 게시글' }}
                 </h2>
                 <div class="section-actions">
-                  <input
-                      v-model="searchKeyword"
-                      @keyup.enter="searchPosts"
-                      placeholder="제목 또는 내용으로 검색"
-                      class="search-input"
-                  >
-                  <button @click="searchPosts" class="btn-search">검색</button>
-                  <div v-if="isOwner && !isParentMenu" class="write-actions">
-                    <router-link
-                        :to="`/${blog.url}/post/create${selectedMenu ? '?menuId=' + selectedMenu.id : ''}`"
-                        class="btn-primary"
+                  <div class="search-container">
+                    <input
+                        v-model="searchKeyword"
+                        class="search-input"
+                        placeholder="제목 또는 내용으로 검색"
+                        @keyup.enter="searchPosts"
                     >
-                      글쓰기
-                    </router-link>
+                    <button class="btn-search" @click="searchPosts">
+                      <i class="fas fa-search"></i>
+                    </button>
+                  </div>
+                  <div v-if="isOwner && !isParentMenu" class="write-actions">
                     <select v-model="pageSize" @change="changePageSize" class="page-size-select">
                       <option value="20">20개</option>
                       <option value="30">30개</option>
                       <option value="50">50개</option>
                     </select>
+                    <router-link
+                        :to="`/${blog.url}/post/create${selectedMenu ? '?menuId=' + selectedMenu.id : ''}`"
+                        class="btn-write"
+                    >
+                      <i class="fas fa-pen"></i> 글쓰기
+                    </router-link>
                   </div>
                 </div>
               </div>
 
               <div class="post-list">
                 <div v-if="!posts.content?.length" class="no-posts">
-                  게시글이 없습니다.
+                  <i class="fas fa-inbox empty-icon"></i>
+                  <p>게시글이 없습니다.</p>
                 </div>
                 <ul v-else class="posts">
                   <li v-for="post in posts.content" :key="post.id" class="post-item">
@@ -75,6 +89,7 @@
                           type="checkbox"
                           v-model="selectedPosts"
                           :value="post.id"
+                          class="checkbox"
                       >
                     </div>
                     <div class="post-content">
@@ -86,39 +101,42 @@
                             }"
                             class="post-link"
                         >
-                          {{ post.title }} [{{ post.commentCount || 0 }}]
+                          <span class="post-title">{{ post.title }}</span>
+                          <span v-if="post.commentCount > 0" class="comment-count">[{{ post.commentCount }}]</span>
                         </router-link>
                         <i v-if="post.hasAttachments || post.fileCount > 0" class="fas fa-paperclip file-icon"></i>
                       </div>
-                      <span class="post-meta">
-                        {{ formatDate(post.updatedAt) }} 조회수: {{ post.viewCount || 0 }}
-                      </span>
+                      <div class="post-info">
+                        <span class="post-date">{{ formatDate(post.updatedAt) }}</span>
+                        <span class="post-views">조회 {{ post.viewCount || 0 }}</span>
+                      </div>
                     </div>
                   </li>
                 </ul>
 
-                <!-- 페이지네이션 조건 제거 -->
-                <div class="pagination">
+                <div v-if="posts.content?.length > 0" class="pagination">
                   <button
                       @click="changePage(currentPage - 1)"
                       :disabled="currentPage === 0"
-                      class="pagination-btn"
+                      class="pagination-btn prev"
                   >
-                    &lt;
+                    <i class="fas fa-chevron-left"></i>
                   </button>
-                  <input
-                      type="text"
-                      v-model.number="currentPageInput"
-                      @keyup.enter="updatePage"
-                      class="pagination-input"
-                  >
-                  <span class="pagination-text"> / {{ posts.totalPages }}</span>
+                  <div class="pagination-numbers">
+                    <input
+                        v-model.number="currentPageInput"
+                        class="pagination-input"
+                        type="text"
+                        @keyup.enter="updatePage"
+                    >
+                    <span class="pagination-text"> / {{ posts.totalPages }}</span>
+                  </div>
                   <button
                       @click="changePage(currentPage + 1)"
                       :disabled="currentPage === posts.totalPages - 1"
-                      class="pagination-btn"
+                      class="pagination-btn next"
                   >
-                    &gt;
+                    <i class="fas fa-chevron-right"></i>
                   </button>
                 </div>
 
@@ -128,15 +146,16 @@
                         type="checkbox"
                         :checked="selectedPosts.length === posts.content?.length"
                         @change="toggleSelectAll"
+                        class="checkbox"
                     >
                     <span>전체 선택</span>
                   </div>
                   <button
                       @click="bulkDeletePosts"
-                      class="btn-danger bulk-delete-btn"
+                      class="btn-delete"
                       :disabled="selectedPosts.length === 0"
                   >
-                    선택 삭제
+                    <i class="fas fa-trash-alt"></i> 선택 삭제
                   </button>
                 </div>
               </div>
@@ -145,8 +164,9 @@
         </div>
       </div>
       <div v-else class="no-blog">
+        <i class="fas fa-exclamation-circle error-icon"></i>
         <h1>블로그를 찾을 수 없습니다.</h1>
-        <router-link to="/" class="btn-primary">홈으로 돌아가기</router-link>
+        <router-link class="btn-home" to="/">홈으로 돌아가기</router-link>
       </div>
     </div>
   </div>
@@ -492,132 +512,321 @@ export default {
     },
   },
 };
-</script>
+</script>ㅇ
 
 <style scoped>
 .blog-view {
-  background-color: #f8f9fa;
+  background-color: #fafafa;
   min-height: 100vh;
   color: #333;
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1.5rem;
 }
 
+/* 로딩 상태 */
 .loading-state {
-  text-align: center;
-  padding: 2rem;
-  font-size: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 0;
 }
 
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #555;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 그리드 레이아웃 */
 .main-grid {
   display: grid;
-  grid-template-columns: 1fr 2fr;
-  gap: 2rem;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
 }
 
-.blog-menu,
-.blog-main {
+/* 메뉴 스타일 */
+.blog-menu {
   background-color: white;
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  position: sticky;
+  top: 1.5rem;
+  height: fit-content;
 }
 
-.blog-header {
-  margin-bottom: 2rem;
+.blog-menu-header {
+  padding: 1.25rem;
+  border-bottom: 1px solid #f2f2f2;
 }
 
-.blog-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #000;
-  margin-bottom: 0.5rem;
-}
-
-.blog-description {
-  color: #666;
-  font-size: 1rem;
-}
-
-.section-title {
-  border-bottom: 2px solid #000;
-  padding-bottom: 0.5rem;
-  margin-bottom: 1rem;
+.blog-menu-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
 }
 
 .menu-list {
   list-style: none;
-  padding: 0;
+  padding: 0.75rem 0;
+  margin: 0;
 }
 
-.menu-item,
-.submenu-item {
-  margin-bottom: 0.5rem;
+.menu-item {
+  margin: 0;
 }
 
-.menu-item a,
-.submenu-item a {
+.menu-link, .submenu-link {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1.25rem;
   text-decoration: none;
   color: #333;
-  transition: color 0.3s ease;
+  transition: all 0.2s ease;
 }
 
-.menu-item a:hover,
-.submenu-item a:hover {
-  color: #666;
+.menu-link:hover, .submenu-link:hover {
+  background-color: #f8f8f8;
+}
+
+.menu-text, .submenu-text {
+  font-size: 0.95rem;
 }
 
 .submenu-list {
   list-style: none;
-  padding-left: 1rem;
-  margin-top: 0.5rem;
+  padding: 0;
+  margin: 0;
+  background-color: #f9f9f9;
 }
 
-.btn-primary,
-.btn-danger {
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  text-align: center;
-}
-
-.btn-primary {
-  background-color: #000;
-  color: white;
-}
-
-.btn-danger {
-  background-color: #dc3545;
-  color: white;
-  padding: 0.5rem 1rem;
+.submenu-link {
+  padding-left: 2.5rem;
   font-size: 0.9rem;
 }
 
+/* 블로그 메인 영역 */
+.blog-main {
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+/* 블로그 헤더 */
+.blog-header {
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.blog-title-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.blog-title {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #222;
+  margin: 0;
+}
+
+.blog-description {
+  margin: 0;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.blog-management-icons .icon-btn {
+  background-color: #f5f5f5;
+  color: #555;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.blog-management-icons .icon-btn:hover {
+  background-color: #ebebeb;
+}
+
+/* 섹션 헤더 */
+.blog-section {
+  padding: 1.75rem 2rem;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.section-title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #222;
+  margin: 0;
+  padding-bottom: 0.5rem;
+  position: relative;
+  border-bottom: none;
+}
+
+.section-title::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 2rem;
+  height: 2px;
+  background-color: #555;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input {
+  padding: 0.65rem 1rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  width: 220px;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #aaa;
+}
+
+.btn-search {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #777;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.write-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.page-size-select {
+  padding: 0.5rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  background-color: white;
+  color: #555;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.btn-write {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  background-color: #555;
+  color: white;
+  border-radius: 6px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-write:hover {
+  background-color: #444;
+}
+
+/* 포스트 목록 */
 .post-list {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
+}
+
+.no-posts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 0;
+  color: #888;
+}
+
+.empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  color: #ccc;
 }
 
 .posts {
   list-style: none;
   padding: 0;
+  margin: 0;
+  border-top: 1px solid #f0f0f0;
 }
 
 .post-item {
   display: flex;
   align-items: center;
-  padding: 1rem;
-  border-bottom: 1px solid #e5e5e5;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s ease;
+}
+
+.post-item:hover {
+  background-color: #f9f9f9;
 }
 
 .post-checkbox {
   margin-right: 1rem;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #555;
 }
 
 .post-content {
@@ -631,186 +840,230 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  flex: 1;
 }
 
 .post-link {
   text-decoration: none;
-  color: #000;
-}
-
-.file-icon {
-  color: #6c757d;
-  font-size: 0.8rem;
-}
-
-.post-meta {
-  color: #666;
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
-.no-posts {
-  text-align: center;
-  color: #666;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-radius: 4px;
-}
-
-.no-blog {
-  text-align: center;
-  padding: 2rem;
-}
-
-@media (max-width: 768px) {
-  .main-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-.blog-title-container {
+  color: #333;
+  font-weight: 500;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.blog-management-icons {
-  display: flex;
-  align-items: center;
+.comment-count {
+  color: #888;
+  font-size: 0.85rem;
+  font-weight: normal;
 }
 
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
+.file-icon {
+  color: #888;
+  font-size: 0.85rem;
 }
 
-.section-actions {
+.post-info {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.search-input {
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  width: 200px;
+.post-date, .post-views {
+  color: #888;
+  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
-.btn-search {
-  padding: 0.5rem 1rem;
-  background-color: #666;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
-
-.btn-search:hover {
-  background-color: #888;
-}
-
-.write-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 50%;
-  color: #333;
-  transition: all 0.3s ease;
-  text-decoration: none;
-}
-
-.icon-btn:hover {
-  background-color: #f0f0f0;
-}
-
-.icon-btn i {
-  font-size: 1.2rem;
-}
-
-/* 페이지네이션 스타일 */
+/* 페이지네이션 */
 .pagination {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
-  margin-top: 1rem;
+  margin-top: 2rem;
+  gap: 0.75rem;
 }
 
 .pagination-btn {
-  padding: 0.5rem 1rem;
-  background-color: #000;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  color: #555;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f5f5f5;
 }
 
 .pagination-btn:disabled {
-  background-color: #ccc;
+  color: #ccc;
+  background-color: #f9f9f9;
   cursor: not-allowed;
 }
 
+.pagination-numbers {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .pagination-input {
-  width: 50px;
+  width: 40px;
   padding: 0.5rem;
   text-align: center;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  font-size: 1rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  font-size: 0.9rem;
 }
 
 .pagination-text {
-  font-size: 1rem;
   color: #666;
+  font-size: 0.9rem;
 }
 
-.page-size-select {
-  margin-left: 1rem;
-  padding: 0.5rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  background-color: white;
-  cursor: pointer;
-}
-
+/* 삭제 섹션 */
 .bulk-delete-section {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background-color: #f8f9fa;
-  border-top: 1px solid #e5e5e5;
+  padding: 1rem 0;
+  margin-top: 1.5rem;
+  border-top: 1px solid #f0f0f0;
 }
 
 .select-all-checkbox {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
+  color: #555;
+  font-size: 0.9rem;
 }
 
-.select-all-checkbox span {
-  margin-left: 0.5rem;
+.btn-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.25rem;
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
 }
 
-.bulk-delete-btn {
-  padding: 0.5rem 1rem;
+.btn-delete:hover:not(:disabled) {
+  background-color: #e53935;
 }
 
-.bulk-delete-btn:disabled {
-  opacity: 0.5;
+.btn-delete:disabled {
+  background-color: #ffcdd2;
   cursor: not-allowed;
+}
+
+/* 블로그 없음 */
+.no-blog {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 0;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 3rem;
+  color: #ccc;
+  margin-bottom: 1.5rem;
+}
+
+.no-blog h1 {
+  margin: 0 0 1.5rem;
+  color: #555;
+  font-weight: 600;
+}
+
+.btn-home {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background-color: #555;
+  color: white;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-home:hover {
+  background-color: #444;
+}
+
+/* 반응형 설정 */
+@media (max-width: 950px) {
+  .main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .blog-menu {
+    position: static;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .section-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+@media (max-width: 550px) {
+  .container {
+    padding: 1rem;
+  }
+
+  .blog-header, .blog-section {
+    padding: 1.25rem;
+  }
+
+  .post-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .post-info {
+    padding-left: 0;
+  }
+
+  .section-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .search-container {
+    width: 100%;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .write-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">

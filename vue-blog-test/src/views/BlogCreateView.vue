@@ -27,27 +27,30 @@
                 v-model="form.description"
                 placeholder="블로그에 대한 설명을 입력하세요"
                 class="form-input"
-                rows="4"
+                rows="3"
             ></textarea>
           </div>
 
           <div class="form-group">
             <label for="url">URL</label>
-            <input
-                type="text"
-                id="url"
-                v-model="form.url"
-                placeholder="고유한 URL을 입력하세요 (영문, 숫자, -만 가능)"
-                @blur="checkUrl"
-                required
-                class="form-input"
-                :class="{ 'input-error': urlError, 'input-success': urlAvailable }"
-            >
-            <div v-if="urlError" class="input-feedback error">
-              {{ urlError }}
+            <div class="url-input-wrapper">
+              <span class="url-prefix">blog.com/</span>
+              <input
+                  id="url"
+                  v-model="form.url"
+                  :class="{ 'input-error': urlError, 'input-success': urlAvailable && form.url }"
+                  class="form-input url-input"
+                  placeholder="your-blog-name"
+                  required
+                  type="text"
+                  @blur="checkUrl"
+              >
             </div>
-            <div v-else-if="urlAvailable" class="input-feedback success">
-              사용 가능한 URL입니다.
+            <div v-if="urlError" class="input-feedback error">
+              <span class="feedback-icon">!</span> {{ urlError }}
+            </div>
+            <div v-else-if="urlAvailable && form.url" class="input-feedback success">
+              <span class="feedback-icon">✓</span> 사용 가능한 URL입니다.
             </div>
           </div>
 
@@ -55,9 +58,11 @@
             <button
                 type="submit"
                 class="submit-button"
-                :disabled="!urlAvailable"
+                :class="{ 'button-loading': isSubmitting }"
+                :disabled="!urlAvailable || !form.title"
             >
-              블로그 생성
+              <span v-if="isSubmitting">처리 중...</span>
+              <span v-else>블로그 생성하기</span>
             </button>
           </div>
         </form>
@@ -67,8 +72,8 @@
 </template>
 
 <script>
-import {mapActions, mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
-import authService from '@/services/authService'; // API 호출용 서비스 import
+import {mapActions, mapGetters} from 'vuex';
+import authService from '@/services/authService';
 
 export default {
   name: 'BlogCreateView',
@@ -78,23 +83,20 @@ export default {
         title: '',
         description: '',
         url: '',
-        userId: null // userId는 이제 스토어에서 가져옴
+        userId: null
       },
       urlAvailable: false,
       urlError: '',
-      isSubmitting: false, // 제출 중 상태 추가
+      isSubmitting: false,
     };
   },
   computed: {
-    // 스토어 getter 매핑
-    ...mapGetters(['userId']) // 현재 로그인된 사용자의 ID 가져오기
+    ...mapGetters(['userId'])
   },
   methods: {
-    // 스토어 액션 매핑
-    ...mapActions(['fetchUserBlog']), // 블로그 생성 후 상태 갱신용
+    ...mapActions(['fetchUserBlog']),
 
     async checkUrl() {
-      // URL 유효성 검사 및 중복 확인 로직 (기존과 동일)
       this.urlError = '';
       this.urlAvailable = false;
       const urlPattern = /^[a-zA-Z0-9-]+$/;
@@ -107,21 +109,17 @@ export default {
         return;
       }
       try {
-        // authService 직접 호출 유지
         const available = await authService.checkBlogUrlAvailability(this.form.url);
         this.urlAvailable = available;
         if (!available) {
           this.urlError = '이미 사용 중인 URL입니다.';
-        } else {
-          this.urlError = '사용 가능한 URL입니다.'; // 성공 메시지
         }
       } catch (error) {
         this.urlError = 'URL 확인 중 오류가 발생했습니다.';
       }
     },
     async handleCreateBlog() {
-      // URL 유효성 및 사용 가능 여부 최종 확인
-      if (!this.urlAvailable || this.urlError === '이미 사용 중인 URL입니다.' || this.urlError === 'URL 확인 중 오류가 발생했습니다.' || this.urlError.includes('URL은 영문')) {
+      if (!this.urlAvailable || this.urlError) {
         alert('URL을 확인해주세요.');
         return;
       }
@@ -130,34 +128,19 @@ export default {
         return;
       }
 
-      // 스토어에서 userId 가져와서 form에 설정
       if (!this.userId) {
         alert('사용자 정보를 가져올 수 없습니다. 다시 로그인해주세요.');
-        // 로그인 페이지로 리디렉션 등 처리
-        this.$router.push('/login'); // 예시
+        this.$router.push('/login');
         return;
       }
       this.form.userId = this.userId;
 
       this.isSubmitting = true;
       try {
-        // authService 직접 호출하여 블로그 생성
         await authService.createBlog(this.form);
-        alert('블로그가 생성되었습니다!');
-
-        // --- Vuex: 생성 성공 후, 스토어의 블로그 정보 갱신 ---
-        await this.fetchUserBlog(); // 사용자의 블로그 정보를 다시 불러옴
-        // --------------------------------------------------
-
-        // 사용자의 새 블로그 URL로 이동 (스토어 갱신 후 blogUrl getter 사용 가능)
-        // 또는 홈으로 이동
-        // const blogUrl = this.$store.getters.blogUrl; // 스토어 getter 접근 (만약 즉시 갱신된다면)
-        // if (blogUrl) {
-        //     this.$router.push(`/${blogUrl}`);
-        // } else {
-        this.$router.push('/'); // 우선 홈으로 이동
-        // }
-
+        await this.fetchUserBlog();
+        this.$router.push('/');
+        alert('블로그가 성공적으로 생성되었습니다!');
       } catch (error) {
         alert('블로그 생성 실패: ' + (error.response?.data?.message || error.message));
       } finally {
@@ -170,40 +153,41 @@ export default {
 
 <style scoped>
 .blog-create {
-  background-color: #f8f9fa;
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fafafa;
+  padding: 1rem;
 }
 
 .container {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 2rem;
+  width: 100%;
+  max-width: 550px;
 }
 
 .blog-create-content {
   background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.08);
+  padding: 2.5rem;
 }
 
 .blog-create-header {
   text-align: center;
   margin-bottom: 2rem;
-  border-bottom: 1px solid #e5e5e5;
-  padding-bottom: 1rem;
 }
 
 .blog-create-header h1 {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 700;
-  color: #000;
+  color: #1a1a1a;
   margin-bottom: 0.5rem;
 }
 
 .blog-create-header p {
   color: #666;
-  font-size: 1rem;
+  font-size: 1.1rem;
 }
 
 .form-group {
@@ -213,73 +197,154 @@ export default {
 .form-group label {
   display: block;
   margin-bottom: 0.5rem;
-  font-weight: 500;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
 }
 
 .form-input {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #e5e5e5;
-  border-radius: 4px;
-  font-size: 1rem;
-  transition: border-color 0.3s ease;
+  padding: 0.8rem 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  background-color: white;
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #000;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-input::placeholder {
+  color: #aaa;
 }
 
 .form-input.input-error {
-  border-color: #dc3545;
+  border-color: #ef4444;
+  background-color: #fff8f8;
 }
 
 .form-input.input-success {
-  border-color: #28a745;
+  border-color: #10b981;
+  background-color: #f0fdf4;
+}
+
+.url-input-wrapper {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.url-prefix {
+  padding: 0.8rem 0.5rem 0.8rem 1rem;
+  background-color: #f5f5f5;
+  color: #666;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  border-right: 1px solid #e0e0e0;
+}
+
+.url-input {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+}
+
+.url-input:focus {
+  box-shadow: none;
+}
+
+.url-input-wrapper:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .input-feedback {
   margin-top: 0.5rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+}
+
+.feedback-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin-right: 0.5rem;
+  font-size: 12px;
 }
 
 .input-feedback.error {
-  color: #dc3545;
+  color: #ef4444;
+}
+
+.input-feedback.error .feedback-icon {
+  background-color: #ef4444;
+  color: white;
 }
 
 .input-feedback.success {
-  color: #28a745;
+  color: #10b981;
+}
+
+.input-feedback.success .feedback-icon {
+  background-color: #10b981;
+  color: white;
 }
 
 .form-actions {
   margin-top: 2rem;
-  text-align: center;
 }
 
 .submit-button {
+  width: 100%;
   background-color: #000;
   color: white;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 4px;
-  font-weight: 600;
+  padding: 0.9rem 1rem;
+  border-radius: 8px;
+  font-weight: 700;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: all 0.2s ease;
+}
+
+.submit-button:hover:not(:disabled) {
+  background-color: #1a1a1a;
+  transform: translateY(-1px);
 }
 
 .submit-button:disabled {
-  background-color: #ccc;
+  background-color: #e0e0e0;
+  color: #999;
   cursor: not-allowed;
 }
 
-@media (max-width: 768px) {
-  .container {
-    padding: 1rem;
+.button-loading {
+  opacity: 0.8;
+  cursor: wait;
+}
+
+@media (max-width: 640px) {
+  .blog-create-content {
+    padding: 1.5rem;
   }
 
   .blog-create-header h1 {
-    font-size: 2rem;
+    font-size: 1.75rem;
+  }
+
+  .blog-create-header p {
+    font-size: 1rem;
   }
 }
 </style>

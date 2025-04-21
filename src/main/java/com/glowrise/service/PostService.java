@@ -11,6 +11,7 @@ import com.glowrise.service.dto.PostDTO;
 import com.glowrise.service.mapper.PostMapper;
 import com.glowrise.service.util.QueryDslPagingUtil;
 import com.glowrise.service.util.SecurityUtil;
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.NumberExpression;
@@ -238,7 +239,13 @@ public class PostService {
         QComment comment = QComment.comment;
         QMenu menu = QMenu.menu;
 
+        // 1. 시작 시간 계산 (기존과 동일)
         LocalDateTime startDateTime = calculateStartDateTime(period);
+
+        LocalDateTime endDateTime = null;
+        if (period == TimePeriod.DAILY) {
+            endDateTime = startDateTime.toLocalDate().plusDays(1).atStartOfDay();
+        }
 
         NumberExpression<Long> popularityScore = post.viewCount.coalesce(0L).multiply(3)
                 .add(comment.countDistinct().multiply(5));
@@ -246,11 +253,18 @@ public class PostService {
         OrderSpecifier<?> scoreOrder = popularityScore.desc();
         OrderSpecifier<?> dateOrder = post.lastModifiedDate.desc();
 
+        BooleanBuilder whereClause = new BooleanBuilder();
+        // 기본 조건: 시작 시간 이후
+        whereClause.and(post.lastModifiedDate.goe(startDateTime));
+
+        if (period == TimePeriod.DAILY && endDateTime != null) {
+            whereClause.and(post.lastModifiedDate.lt(endDateTime)); // less than (<) 내일 시작 시간
+        }
         List<Long> topPostIds = queryFactory
                 .select(post.id)
                 .from(post)
                 .leftJoin(post.comments, comment)
-                .where(post.lastModifiedDate.goe(startDateTime))
+                .where(whereClause) // BooleanBuilder로 생성된 조건 적용
                 .groupBy(post.id, post.viewCount, post.lastModifiedDate)
                 .orderBy(scoreOrder, dateOrder)
                 .limit(limit)
