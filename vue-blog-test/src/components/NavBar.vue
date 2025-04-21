@@ -100,14 +100,9 @@
                   <div class="menu-divider"></div>
                   <div class="menu-group">관리자 메뉴</div>
 
-                  <router-link class="menu-item" to="/admin/users">
-                    <i class="pi pi-users"></i>
-                    <span>사용자 관리</span>
-                  </router-link>
-
-                  <button class="menu-item" @click="openCreateAdModal">
-                    <i class="pi pi-plus-circle"></i>
-                    <span>광고 생성</span>
+                  <button class="menu-item" @click="openAdminModal">
+                    <i class="pi pi-cog"></i>
+                    <span>관리자 설정</span>
                   </button>
                 </template>
 
@@ -139,25 +134,27 @@
         @login-success="handleAuthSuccess"
         @profile-completed="handleAuthSuccess"/>
 
-    <AdvertisementModal v-model:visible="isAdModalVisible" @saved="handleAdSaved"/>
+    <AdminManagementModal v-model:visible="isAdminModalVisible"/>
   </div>
 </template>
 
 <script>
 // Vuex 헬퍼 함수 임포트
-import {mapActions, mapGetters, mapState} from 'vuex';
+import {mapActions, mapGetters} from 'vuex';
 // 서비스 임포트
 import authService from '@/services/authService';
 import {websocketService} from '@/services/websocketService';
 // 자식 컴포넌트 임포트
 import LoginSignupModal from '@/components/LoginSignupModal.vue';
-import AdvertisementModal from '@/components/admin/AdvertisementModal.vue';
+// import AdvertisementModal from '@/components/admin/AdvertisementModal.vue'; // NavBar에서 직접 사용 안 하므로 제거
+import AdminManagementModal from '@/components/admin/AdminManagementModal.vue'; // 관리자 모달 임포트
 
 export default {
   name: 'NavBar',
   components: {
     LoginSignupModal,
-    AdvertisementModal
+    // AdvertisementModal, // 컴포넌트 등록 제거
+    AdminManagementModal // 관리자 모달 컴포넌트 등록
   },
   data() {
     return {
@@ -170,20 +167,93 @@ export default {
       showLoginModal: false,
       modalInitialTab: 'login',
       oauthCompletionDataForModal: null,
-      isAdModalVisible: false,
+      // isAdModalVisible: false, // 기존 광고 모달 상태 제거
+      isAdminModalVisible: false, // 관리자 모달 표시 상태 추가
     };
   },
   computed: {
-    ...mapState([]),
+    // mapState 사용 시 필요한 상태 명시 (현재 코드에서는 직접 사용 안 함)
+    // ...mapState([]),
+
+    // mapGetters 로 Vuex 상태/게터 가져오기
     ...mapGetters([
       'isLoggedIn', 'userId', 'username', 'nickName', 'userEmail',
-      'userProfileImage', 'blogUrl', 'hasBlog', 'isLoading', 'isAdmin'
+      'userProfileImage', 'blogUrl', 'hasBlog', 'isLoading', 'isAdmin' // isAdmin 게터 사용
     ]),
+
+    // 프로필 이미지 경로 계산
     displayProfileImage() {
       return this.userProfileImage || '/img/default-profile.png';
     },
+
+    // 표시할 이름 계산 (닉네임 우선)
     displayNicknameOrUsername() {
       return this.nickName || this.username || '사용자';
+    },
+
+    // 사용자 드롭다운 메뉴 아이템 계산
+    userMenuItems() {
+      let items = [];
+      if (this.isLoggedIn) {
+        items = [
+          {
+            label: '마이페이지', // 실제 기능에 맞게 수정
+            icon: 'pi pi-user-edit',
+            command: () => {
+              // 마이페이지 또는 프로필 수정 페이지로 이동
+              // 예: this.$router.push('/profile/edit');
+              alert('마이페이지 기능 구현 필요');
+              this.showUserDropdown = false;
+            }
+          },
+          {
+            label: '내 블로그',
+            icon: 'pi pi-book',
+            visible: this.hasBlog, // 블로그가 있을 때만 표시
+            command: () => {
+              if (this.blogUrl) {
+                this.$router.push(`/${this.blogUrl}`);
+              }
+              this.showUserDropdown = false;
+            }
+          },
+          {
+            label: '블로그 관리',
+            icon: 'pi pi-cog',
+            visible: this.hasBlog, // 블로그가 있을 때만 표시
+            command: () => {
+              if (this.blogId) {
+                this.$router.push(`/blog/edit/${this.blogId}`);
+              } else {
+                // 블로그 ID 없는 경우 예외 처리 또는 메시지
+              }
+              this.showUserDropdown = false;
+            }
+          },
+          {
+            separator: true
+          },
+          {
+            label: '로그아웃',
+            icon: 'pi pi-sign-out',
+            command: this.handleLogout // 로그아웃 메소드 호출
+          }
+        ];
+
+        // 관리자일 경우 '관리자 설정' 메뉴 추가
+        if (this.isAdmin) {
+          // 구분선 앞에 추가 (순서 조정)
+          items.splice(items.length - 2, 0, {
+            label: '관리자 설정', // 이름 변경
+            icon: 'pi pi-cog',
+            command: () => {
+              this.openAdminModal(); // 관리자 모달 열기
+              this.showUserDropdown = false;
+            }
+          });
+        }
+      }
+      return items;
     }
   },
   watch: {
@@ -216,13 +286,10 @@ export default {
     ...mapActions(['fetchCurrentUser', 'logoutAndClear']),
 
     handleOutsideClick(event) {
-      // 알림 메뉴 외부 클릭 처리
       const notificationMenu = this.$el.querySelector('.notification-menu');
       if (notificationMenu && !notificationMenu.contains(event.target)) {
         this.showNotificationDropdown = false;
       }
-
-      // 사용자 메뉴 외부 클릭 처리
       const userMenu = this.$el.querySelector('.user-menu');
       if (userMenu && !userMenu.contains(event.target)) {
         this.showUserDropdown = false;
@@ -231,15 +298,14 @@ export default {
 
     toggleUserMenu() {
       this.showUserDropdown = !this.showUserDropdown;
-      this.showNotificationDropdown = false; // 사용자 메뉴 열 때 알림 닫기
+      this.showNotificationDropdown = false;
     },
 
     toggleNotificationDropdown() {
       this.showNotificationDropdown = !this.showNotificationDropdown;
-      this.showUserDropdown = false; // 알림 메뉴 열 때 사용자 메뉴 닫기
-
+      this.showUserDropdown = false;
       if (this.showNotificationDropdown && this.isLoggedIn) {
-        this.fetchNotifications(); // 열 때마다 최신 정보 로드
+        this.fetchNotifications();
       }
     },
 
@@ -315,6 +381,7 @@ export default {
     },
 
     formatDate(dateString) {
+      // ... (기존 formatDate 로직 유지) ...
       if (!dateString) return '';
       try {
         const date = new Date(dateString);
@@ -348,6 +415,7 @@ export default {
         this.$toast.add({severity: 'error', summary: '오류', detail: '로그아웃 처리 중 오류', life: 3000});
       } finally {
         this.isLoggingOut = false;
+        this.showUserDropdown = false; // 드롭다운 닫기
       }
     },
 
@@ -384,18 +452,21 @@ export default {
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'login';
       this.showLoginModal = true;
+      this.showUserDropdown = false; // 드롭다운 닫기
     },
 
     openSignupModal() {
       this.oauthCompletionDataForModal = null;
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
+      this.showUserDropdown = false; // 드롭다운 닫기
     },
 
     openProfileCompletionModal() {
       this.oauthCompletionDataForModal = {email: this.userEmail, oauthName: this.username};
       this.modalInitialTab = 'signup';
       this.showLoginModal = true;
+      this.showUserDropdown = false; // 드롭다운 닫기
     },
 
     closeLoginModal() {
@@ -413,13 +484,21 @@ export default {
       }
     },
 
-    openCreateAdModal() {
-      this.isAdModalVisible = true;
+    // 관리자 모달 열기 메소드 추가
+    openAdminModal() {
+      this.isAdminModalVisible = true;
+      this.showUserDropdown = false; // 드롭다운 닫기
     },
 
-    handleAdSaved() {
-      this.$toast.add({severity: 'success', summary: '성공', detail: '광고 생성 완료', life: 3000});
-    }
+    // 기존 광고 생성 모달 열기 메소드 제거
+    // openCreateAdModal() {
+    //   this.isAdModalVisible = true;
+    // },
+
+    // 기존 광고 저장 완료 핸들러 제거
+    // handleAdSaved() {
+    //   this.$toast.add({severity: 'success', summary: '성공', detail: '광고 생성 완료', life: 3000});
+    // }
   }
 };
 </script>
@@ -453,7 +532,7 @@ export default {
   color: #333;
   text-decoration: none;
   letter-spacing: -0.3px;
-  background: linear-gradient(135deg, #3182ce 0%, #63b3ed 100%);
+  background: black;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;

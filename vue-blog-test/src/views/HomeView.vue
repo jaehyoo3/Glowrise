@@ -1,100 +1,100 @@
 <template>
   <div class="home">
     <div class="container">
-      <div class="home-content">
-        <div class="hero-section">
-          <h1 class="site-title">Glowrise</h1>
-          <p class="site-description">Create, Share, Inspire</p>
-        </div>
+      <!-- 광고 섹션 -->
+      <main-advertisement class="ad-section"/>
 
-        <main-advertisement/>
-        <div class="main-grid">
-          <div class="blog-overview">
-            <h2>Welcome to Glowrise</h2>
-            <p>Your journey of sharing stories begins here.</p>
+      <div class="main-content">
+        <!-- 인기 게시글 섹션 -->
+        <section class="popular-posts-section">
+          <div class="section-header">
+            <h2>인기 게시글</h2>
+            <div class="time-period-filter">
+              <button
+                  :class="{ active: selectedPeriod === 'DAILY' }"
+                  class="period-btn"
+                  @click="changeTimePeriod('DAILY')"
+              >
+                일간
+              </button>
+              <button
+                  :class="{ active: selectedPeriod === 'WEEKLY' }"
+                  class="period-btn"
+                  @click="changeTimePeriod('WEEKLY')"
+              >
+                주간
+              </button>
+              <button
+                  :class="{ active: selectedPeriod === 'MONTHLY' }"
+                  class="period-btn"
+                  @click="changeTimePeriod('MONTHLY')"
+              >
+                월간
+              </button>
+            </div>
+          </div>
 
-            <div class="popular-posts">
-              <h3>Featured Posts</h3>
-              <div v-if="isPostsLoading" class="loading-state">
-                <span>Loading popular posts...</span>
-              </div>
-              <div v-else-if="!popularPosts || popularPosts.length === 0" class="placeholder-posts">
-                <p>Trending content coming soon...</p>
-              </div>
-              <div v-else class="posts-grid">
-                <div
-                    v-for="post in popularPosts"
-                    :key="post.id"
-                    class="post-card"
-                    @click="navigateToPost(post)">
-                  <div class="post-content">
-                    <h4 class="post-title">{{ post.title }}</h4>
-                    <p class="post-excerpt">{{ truncateContent(post.content) }}</p>
-                    <div class="post-meta">
-                      <span><i class="fa-regular fa-eye"></i> {{ post.viewCount || 0 }}</span>
-                      <span><i class="fa-regular fa-comment"></i> {{ post.commentCount || 0 }}</span>
-                      <span><i class="fa-regular fa-clock"></i> {{ formatDate(post.updatedAt) }}</span>
-                    </div>
-                  </div>
+          <div v-if="isPostsLoading" class="loading-state">
+            <span>인기 게시글을 불러오는 중...</span>
+          </div>
+          <div v-else-if="!popularPosts || popularPosts.length === 0" class="placeholder-posts">
+            <p>곧 인기 콘텐츠가 업데이트될 예정입니다.</p>
+          </div>
+          <div v-else class="posts-grid">
+            <div
+                v-for="post in popularPosts"
+                :key="post.id"
+                class="post-card"
+                @click="navigateToPost(post)">
+              <div class="post-content">
+                <h3 class="post-title">{{ post.title }}</h3>
+                <p class="post-excerpt">{{ truncateContent(post.content) }}</p>
+                <div class="post-meta">
+                  <span><i class="fa-regular fa-eye"></i> {{ post.viewCount || 0 }}</span>
+                  <span><i class="fa-regular fa-comment"></i> {{ post.commentCount || 0 }}</span>
+                  <span><i class="fa-regular fa-clock"></i> {{ formatDate(post.updatedAt) }}</span>
                 </div>
               </div>
-              <div class="time-period-filter">
-                <button
-                    :class="{ active: selectedPeriod === 'DAILY' }"
-                    class="period-btn"
-                    @click="changeTimePeriod('DAILY')"
-                >
-                  Daily
-                </button>
-                <button
-                    :class="{ active: selectedPeriod === 'WEEKLY' }"
-                    class="period-btn"
-                    @click="changeTimePeriod('WEEKLY')"
-                >
-                  Weekly
-                </button>
-                <button
-                    :class="{ active: selectedPeriod === 'MONTHLY' }"
-                    class="period-btn"
-                    @click="changeTimePeriod('MONTHLY')"
-                >
-                  Monthly
-                </button>
-              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 사이드바 섹션 -->
+        <section class="sidebar-section">
+          <div v-if="isSidebarLoading" class="loading-state">
+            <span>로딩 중...</span>
+          </div>
+          <div v-else-if="!isLoggedIn" class="auth-prompt">
+            <h3>블로그 시작하기</h3>
+            <p>로그인하거나 회원가입하여 나만의 블로그를 만들어보세요.</p>
+            <div class="action-hint">상단 네비게이션 바의 로그인/회원가입 버튼을 이용해주세요.</div>
+          </div>
+          <div v-else-if="isLoggedIn && !hasBlog" class="create-blog-prompt">
+            <h3>블로그 만들기</h3>
+            <template v-if="nickName">
+              <p>아직 블로그를 만들지 않았습니다. 지금 시작해보세요!</p>
+              <router-link class="btn-primary" to="/blog/create">블로그 만들기</router-link>
+            </template>
+            <template v-else>
+              <p>환영합니다! 블로그를 만들기 전에 먼저 닉네임을 설정해주세요.</p>
+              <div class="action-hint">(상단 네비게이션 바의 사용자 메뉴에서 설정 가능합니다)</div>
+            </template>
+          </div>
+          <div v-else-if="isLoggedIn && hasBlog" class="blog-info">
+            <h3>내 블로그: {{ blogTitle }}</h3>
+            <p>블로그를 관리하거나 방문해보세요.</p>
+            <div class="blog-actions">
+              <router-link :to="`/${blogUrl}`" class="btn-primary">블로그 방문</router-link>
+              <router-link v-if="blogId" :to="`/blog/edit/${blogId}`" class="btn-secondary">블로그 관리</router-link>
             </div>
           </div>
 
-          <div class="blog-sidebar">
-            <div v-if="isSidebarLoading" class="loading-state">
-              <span>Loading...</span>
-            </div>
-            <div v-else-if="!isLoggedIn" class="login-prompt">
-              <h3>Start Your Blog</h3>
-              <p>Sign in or sign up to create your personal space and share your stories.</p>
-              <p style="margin-top: 1rem; font-size: 0.9em; color: #555;">Please use the login/signup buttons in the
-                navigation bar.</p>
-            </div>
-            <div v-else-if="isLoggedIn && !hasBlog" class="create-blog-prompt">
-              <h3>Your Blog Awaits</h3>
-              <template v-if="nickName">
-                <p>You haven't created a blog yet. Let's get started!</p>
-                <router-link class="btn-secondary" to="/blog/create">Create Your Blog</router-link>
-              </template>
-              <template v-else>
-                <p>Welcome! Please set your nickname first to create a blog.</p>
-                <p style="font-size: 0.85em; color: #666;">(You can set it from the user menu in the navigation bar)</p>
-              </template>
-            </div>
-            <div v-else-if="isLoggedIn && hasBlog" class="blog-info">
-              <h3>My Blog: {{ blogTitle }}</h3>
-              <p>Manage your blog or view it live.</p>
-              <div class="blog-actions">
-                <router-link :to="`/${blogUrl}`" class="btn-primary">View Blog</router-link>
-                <router-link v-if="blogId" :to="`/blog/edit/${blogId}`" class="btn-secondary">Manage Blog</router-link>
-              </div>
-            </div>
+          <!-- 환영 메시지 -->
+          <div class="welcome-block">
+            <h3>Glowrise에 오신 것을 환영합니다</h3>
+            <p>여러분의 이야기를 공유하는 여정이 여기서 시작됩니다. 매일 의미 있는 콘텐츠를 만들어내는 작가와 독자들의 커뮤니티에 참여해보세요.</p>
           </div>
-        </div>
+        </section>
       </div>
     </div>
   </div>
@@ -103,14 +103,12 @@
 <script>
 import {mapGetters} from 'vuex';
 import authService from '@/services/authService';
-// ===== 광고 컴포넌트 임포트 =====
-import MainAdvertisement from '@/components/MainAdvertisement.vue'; // 경로 확인 필요
+import MainAdvertisement from '@/components/MainAdvertisement.vue';
 
 export default {
   name: 'HomeView',
-  // ===== 광고 컴포넌트 등록 =====
   components: {
-    MainAdvertisement // 등록
+    MainAdvertisement
   },
   data() {
     return {
@@ -141,7 +139,6 @@ export default {
   async mounted() {
     console.log("HomeView: mounted hook. 인기글 로드 시작.");
     await this.loadPopularPosts();
-    // HomeView에서 광고 로드를 직접 트리거할 필요는 없음 (MainAdvertisement에서 처리)
   },
   methods: {
     async loadPopularPosts() {
@@ -167,7 +164,7 @@ export default {
     truncateContent(content) {
       if (!content) return '';
       const textContent = content.replace(/<[^>]*>/g, '');
-      const maxLength = 80;
+      const maxLength = 100;
       if (textContent.length > maxLength) {
         return textContent.substring(0, maxLength) + '...';
       }
@@ -201,109 +198,215 @@ export default {
 </script>
 
 <style scoped>
-/* --- 기본 레이아웃 및 컨테이너 --- */
+/* --- 기본 레이아웃 --- */
 .home {
-  background-color: #fafafa; /* 매우 연한 그레이 배경 */
+  background-color: #f8f8f8;
   min-height: 100vh;
-  color: #212121; /* 진한 검정 텍스트 */
-  font-family: 'Inter', 'Helvetica Neue', sans-serif; /* 모던한 산세리프 폰트 */
+  color: #333;
+  font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
 }
 
 .container {
-  max-width: 1140px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
-  box-sizing: border-box;
 }
 
-.home-content {
-  display: flex;
-  flex-direction: column;
-  gap: 3rem; /* 섹션 간 간격 증가 */
+/* --- 광고 섹션 --- */
+.ad-section {
+  margin-bottom: 2rem;
+  width: 100%;
 }
 
-/* --- 히어로 섹션 --- */
-.hero-section {
-  text-align: center;
-  padding: 4rem 0; /* 패딩 증가 */
-}
-
-.site-title {
-  font-size: clamp(2.5rem, 6vw, 4rem);
-  font-weight: 800; /* 더 굵게 */
-  color: #000; /* 순수 검정 */
-  margin-bottom: 0.5rem;
-  letter-spacing: -0.02em; /* 레터스페이싱 */
-}
-
-.site-description {
-  font-size: clamp(1rem, 3vw, 1.2rem);
-  color: #757575; /* 미디엄 그레이 */
-  font-weight: 300; /* 가벼운 폰트 웨이트 */
-  letter-spacing: 0.05em; /* 약간 넓은 레터스페이싱 */
-}
-
-/* --- 메인 그리드 --- */
-.main-grid {
+/* --- 메인 콘텐츠 레이아웃 --- */
+.main-content {
   display: grid;
-  /* 기본 2열, 작은 화면에서는 1열 */
-  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
-  gap: 2.5rem; /* 그리드 아이템 간 간격 증가 */
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
 }
 
-.blog-overview, .blog-sidebar {
+/* --- 인기 게시글 섹션 --- */
+.popular-posts-section {
   background-color: white;
-  border-radius: 4px; /* 더 작은 둥글기 */
-  padding: 2.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* 매우 미묘한 그림자 */
+  padding: 2rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-.blog-sidebar h3, .popular-posts h3, .blog-overview h2 {
-  border-bottom: 1px solid #eee; /* 더 얇은 구분선 */
-  padding-bottom: 0.8rem;
-  margin-top: 0; /* 제목 위 기본 마진 제거 */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 1.8rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #eee;
+}
+
+.section-header h2 {
   font-size: 1.4rem;
-  color: #000;
   font-weight: 600;
+  margin: 0;
+  color: #222;
   letter-spacing: -0.01em;
 }
 
-.blog-overview h2 {
-  font-size: 1.6rem; /* Welcome 메시지 약간 더 크게 */
+/* 게시글 그리드 */
+.posts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
 }
 
+.post-card {
+  background-color: white;
+  border: 1px solid #eaeaea;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  height: 100%;
+}
 
-/* --- 버튼 스타일 --- */
+.post-card:hover {
+  border-color: #d0d0d0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.06);
+}
+
+.post-content {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.post-title {
+  font-size: 1.1rem;
+  margin: 0 0 1rem 0;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #222;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.post-excerpt {
+  color: #666;
+  line-height: 1.6;
+  flex-grow: 1;
+  font-size: 0.95rem;
+  margin-bottom: 1.2rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.post-meta {
+  display: flex;
+  font-size: 0.8rem;
+  color: #888;
+  gap: 1rem;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 0.8rem;
+}
+
+.post-meta span {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* 필터 버튼 */
+.time-period-filter {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.period-btn {
+  border: 1px solid #e0e0e0;
+  background: white;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.period-btn:hover {
+  background: #f5f5f5;
+}
+
+.period-btn.active {
+  background: #333;
+  color: white;
+  border-color: #333;
+}
+
+/* --- 사이드바 섹션 --- */
+.sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.sidebar-section > div {
+  background-color: white;
+  padding: 1.8rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.sidebar-section h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #222;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid #eee;
+}
+
+.action-hint {
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+  color: #777;
+}
+
+/* 환영 블록 */
+.welcome-block {
+  background-color: white;
+}
+
+.welcome-block p {
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 버튼 스타일 */
 .btn-primary, .btn-secondary {
   display: inline-block;
-  padding: 0.7rem 1.6rem;
-  border-radius: 3px; /* 더 작은 둥글기 */
+  padding: 0.7rem 1.4rem;
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
   text-align: center;
   cursor: pointer;
-  font-size: 0.9rem; /* 버튼 폰트 크기 약간 줄임 */
-  letter-spacing: 0.02em;
+  font-size: 0.9rem;
 }
 
 .btn-primary {
-  background-color: #000; /* 검정색 버튼 */
+  background-color: #333;
   color: white;
-  border: 1px solid #000;
+  border: 1px solid #333;
 }
 
 .btn-primary:hover {
-  background-color: #333; /* 호버 시 약간 밝은 검정 */
-  border-color: #333;
+  background-color: #222;
 }
 
 .btn-secondary {
   background-color: white;
-  color: #000;
+  color: #333;
   border: 1px solid #ddd;
-  /* margin-left 제거 (gap으로 처리) */
 }
 
 .btn-secondary:hover {
@@ -314,189 +417,61 @@ export default {
 .blog-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem; /* 버튼 간 간격 */
+  gap: 0.8rem;
   margin-top: 1.2rem;
 }
 
-.login-prompt p, .create-blog-prompt p { /* 사이드바 텍스트 스타일 */
-  color: #555;
-  margin-bottom: 1.5rem;
-  line-height: 1.6;
-}
-
-/* --- 플레이스홀더 및 로딩 상태 --- */
-.placeholder-posts, .loading-state {
-  background-color: #f5f5f5;
+/* 로딩 및 플레이스홀더 상태 */
+.loading-state, .placeholder-posts {
+  background-color: #f9f9f9;
   padding: 2rem;
-  border-radius: 3px;
   text-align: center;
-  color: #757575;
+  color: #777;
   min-height: 120px;
   display: flex;
   justify-content: center;
   align-items: center;
 }
 
-/* --- 인기 게시글 카드 --- */
-.posts-grid {
-  display: grid;
-  /* 화면 크기에 따라 1개 또는 2개 표시 */
-  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
-  gap: 1.5rem; /* 카드 간 간격 */
-  margin-top: 1.2rem;
-}
-
-.post-card {
-  border: none; /* 테두리 제거 */
-  border-radius: 3px;
-  overflow: hidden;
-  background: white;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06); /* 그림자 약간 조정 */
-}
-
-.post-card:hover {
-  transform: translateY(-4px); /* 호버 시 약간 위로 이동 */
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
-}
-
-.post-content {
-  padding: 1.5rem;
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.post-title {
-  margin: 0 0 0.8rem 0;
-  font-size: 1.1rem; /* 제목 크기 */
-  font-weight: 600;
-  line-height: 1.4;
-  color: #111; /* 제목 색상 약간 조정 */
-  letter-spacing: -0.01em;
-  /* 여러 줄 말줄임 */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-height: 3.08em; /* line-height * 2줄 */
-}
-
-.post-excerpt {
-  font-size: 0.9rem;
-  color: #555;
-  margin-bottom: 1.2rem;
-  line-height: 1.6;
-  flex-grow: 1;
-  /* 여러 줄 말줄임 */
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-height: 4.32em; /* line-height * 3줄 */
-}
-
-.post-meta {
-  display: flex;
-  flex-wrap: wrap;
-  font-size: 0.75rem; /* 메타 폰트 크기 약간 줄임 */
-  color: #9e9e9e;
-  gap: 0.8rem;
-  margin-top: auto;
-  padding-top: 0.7rem;
-  border-top: 1px solid #f0f0f0;
-}
-
-.post-meta span {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-.post-meta span i {
-  font-size: 0.9em;
-  position: relative;
-  top: -1px; /* 아이콘 미세 조정 */
-}
-
-/* --- 기간 필터 버튼 --- */
-.time-period-filter {
-  display: flex;
-  justify-content: flex-end; /* 오른쪽 정렬 */
-  gap: 0.5rem;
-  margin-top: 1.8rem;
-}
-
-.period-btn {
-  border: 1px solid #e0e0e0;
-  background: white;
-  padding: 0.4rem 1rem;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: #757575;
-  font-weight: 500;
-}
-
-.period-btn:hover {
-  background: #f5f5f5;
-  border-color: #d0d0d0;
-}
-
-.period-btn.active {
-  background: #000; /* 검정색 활성 버튼 */
-  color: white;
-  border-color: #000;
-}
-
-/* --- 모달 관련 스타일 제거됨 --- */
-
-/* --- 반응형 조정 --- */
+/* 미디어 쿼리 */
 @media (max-width: 992px) {
-  .main-grid {
-    /* 컬럼 너비 비율 조정 가능 */
-    grid-template-columns: 1fr; /* 992px 이하에서도 1열로 변경 (선택 사항) */
-    /* 또는 grid-template-columns: 3fr 2fr; 유지 */
+  .main-content {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar-section {
+    order: 1;
+    margin-bottom: 1.5rem;
+  }
+
+  .popular-posts-section {
+    order: 2;
   }
 }
 
 @media (max-width: 768px) {
   .container {
-    padding: 1.5rem;
+    padding: 1.5rem 1rem;
   }
 
-  .hero-section {
-    padding: 3rem 0;
-  }
-  .main-grid {
-    grid-template-columns: 1fr; /* 작은 화면에서는 무조건 1열 */
-    gap: 2rem;
-  }
-
-  .blog-overview, .blog-sidebar {
-    padding: 1.8rem;
-  }
-
-  /* 모바일에서 요소 순서 재정의 필요시 */
-  .blog-overview {
-    order: 1; /* 기본 순서 */
-  }
-  .blog-sidebar {
-    order: 2; /* 기본 순서 */
-  }
-
-  .posts-grid {
-    grid-template-columns: 1fr; /* 모바일에서는 항상 1열 카드 */
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
   }
 
   .time-period-filter {
-    justify-content: center; /* 모바일에서는 필터 버튼 가운데 정렬 */
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .period-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .posts-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

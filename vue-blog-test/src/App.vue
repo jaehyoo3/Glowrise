@@ -1,15 +1,12 @@
 <template>
   <NavBar/>
   <router-view/>
+  <footer-component/>
 </template>
 
 <script setup>
-// NavBar 컴포넌트를 가져옵니다.
-// @는 src 디렉토리를 가리키는 별칭입니다 (vue.config.js 또는 vite.config.js 설정).
 import NavBar from '@/components/NavBar.vue';
-
-// <script setup>을 사용하면 components 옵션에 등록할 필요 없이
-// 템플릿에서 바로 NavBar를 사용할 수 있습니다.
+import FooterComponent from './components/FooterComponent.vue';
 </script>
 
 <style>
