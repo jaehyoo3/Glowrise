@@ -1,8 +1,11 @@
 <template>
   <div class="set-nickname-container">
     <div class="set-nickname-wrapper">
-      <h2>닉네임 설정</h2>
-      <p>블로그 활동에 사용할 닉네임을 설정해주세요.</p>
+      <div class="nickname-header">
+        <h2 class="nickname-title">닉네임 설정</h2>
+        <p class="nickname-subtitle">블로그 활동에 사용할 닉네임을 설정해주세요.</p>
+      </div>
+
       <form @submit.prevent="submitNickname">
         <div class="form-group">
           <label for="nickname">닉네임</label>
@@ -12,16 +15,17 @@
               maxlength="15"
               minlength="2"
               pattern="^[a-zA-Z0-9가-힣_]+$"
-              placeholder="2~15자의 영문, 숫자, 한글, _"
+              placeholder="닉네임 입력"
               required
               type="text"
           >
+          <small class="info-text">2~15자, 영문, 숫자, 한글, 밑줄(_)만 사용 가능</small>
           <div v-if="inputError" class="error-message">{{ inputError }}</div>
         </div>
 
-        <div v-if="serverError" class="error-message">{{ serverError }}</div>
+        <div v-if="serverError" class="error-message server-error">{{ serverError }}</div>
 
-        <button :disabled="isSubmitting" class="submit-btn" type="submit">
+        <button :disabled="isSubmitting" class="primary-btn" type="submit">
           {{ isSubmitting ? '저장 중...' : '닉네임 저장' }}
         </button>
       </form>
@@ -29,206 +33,135 @@
   </div>
 </template>
 
-<script>
-import {mapActions, mapGetters} from 'vuex'; // Vuex 헬퍼 함수 import
-import authService from '@/services/authService'; // API 호출용 서비스 import
-
-export default {
-  name: 'SetNickname',
-  data() {
-    return {
-      nickname: '',          // 입력된 닉네임
-      inputError: '',      // 입력 유효성 에러 메시지
-      serverError: '',     // 서버 응답 에러 메시지
-      isSubmitting: false, // 제출 중 상태
-    };
-  },
-  computed: {
-    // --- Vuex Getters 매핑 ---
-    ...mapGetters(['isLoggedIn', 'nickName', 'isLoadingUser']), // 로그인 상태, 닉네임, 스토어 로딩 상태
-    // ------------------------
-  },
-  watch: {
-    // 스토어 로딩 완료 및 닉네임 상태 변경 감지
-    isLoadingUser(loading) {
-      if (!loading && this.isLoggedIn && this.nickName) {
-        console.log("SetNickname Watcher: 스토어 로드 완료, 닉네임 존재 확인 -> 홈으로 이동");
-        this.redirectToHomeIfNicknameExists();
-      }
-    },
-    nickName(newNickname) {
-      if (this.isLoggedIn && newNickname) {
-        console.log("SetNickname Watcher: 스토어 닉네임 변경됨 -> 홈으로 이동");
-        this.redirectToHomeIfNicknameExists();
-      }
-    }
-  },
-  methods: {
-    // --- Vuex Actions 매핑 ---
-    ...mapActions(['fetchCurrentUser']), // 사용자 정보 갱신용 액션
-    // ------------------------
-
-    // 입력값 유효성 검사 (기존과 동일)
-    validateInput() {
-      this.inputError = '';
-      if (!this.nickname) {
-        this.inputError = '닉네임을 입력해주세요.';
-        return false;
-      }
-      if (this.nickname.length < 2 || this.nickname.length > 15) {
-        this.inputError = '닉네임은 2자 이상 15자 이하로 입력해주세요.';
-        return false;
-      }
-      const pattern = /^[a-zA-Z0-9가-힣_]+$/;
-      if (!pattern.test(this.nickname)) {
-        this.inputError = '닉네임은 영문, 숫자, 한글, 밑줄(_)만 사용 가능합니다.';
-        return false;
-      }
-      return true;
-    },
-
-    // 닉네임 제출
-    async submitNickname() {
-      this.serverError = '';
-      // 입력 유효성 검사
-      if (!this.validateInput()) {
-        return;
-      }
-
-      this.isSubmitting = true;
-      try {
-        // authService 통해 닉네임 업데이트 API 호출 (변경 없음)
-        await authService.updateUserNickname(this.nickname);
-        alert('닉네임이 성공적으로 설정되었습니다.');
-
-        // --- Vuex: 성공 후 스토어 상태 갱신 ---
-        // fetchCurrentUser 액션을 호출하여 최신 사용자 정보(닉네임 포함)를 스토어에 반영
-        await this.fetchCurrentUser();
-        console.log("SetNickname: 스토어 사용자 정보 갱신 완료.");
-        // ---------------------------------
-
-        // 스토어 갱신 후 홈으로 이동
-        this.$router.push('/');
-
-      } catch (error) {
-        console.error('닉네임 설정 오류:', error);
-        // 에러 메시지 처리 (기존과 동일)
-        if (error.response?.data?.message) {
-          this.serverError = error.response.data.message;
-        } else {
-          this.serverError = '닉네임 설정 중 오류가 발생했습니다. 다시 시도해주세요.';
-        }
-      } finally {
-        this.isSubmitting = false;
-      }
-    },
-
-    // 닉네임 존재 시 홈으로 리디렉션하는 함수
-    redirectToHomeIfNicknameExists() {
-      // 로그인 상태이고 닉네임이 존재하면 홈으로 replace
-      // replace를 사용하여 뒤로가기로 이 페이지에 다시 접근하는 것을 방지
-      if (this.isLoggedIn && this.nickName) {
-        console.log("SetNickname: 이미 닉네임이 설정되어 홈으로 이동합니다.");
-        this.$router.replace('/');
-      }
-    }
-  },
-  mounted() {
-    // --- Vuex: 마운트 시 스토어 상태 확인 ---
-    // 스토어가 아직 로딩 중일 수 있으므로, 로딩 완료 후 또는 즉시 확인
-    console.log("SetNickname: mounted hook. 스토어 닉네임 확인 시도.");
-    // 스토어가 로딩 중이 아니고, 로그인 상태이며, 닉네임이 이미 있다면 리디렉션
-    if (!this.isLoadingUser && this.isLoggedIn && this.nickName) {
-      this.redirectToHomeIfNicknameExists();
-    } else if (!this.isLoggedIn && !this.isLoadingUser) {
-      // 로그인이 안 된 상태로 이 페이지에 접근했다면 홈으로 보냄
-      console.log("SetNickname: 로그인되지 않은 상태입니다. 홈으로 이동합니다.");
-      this.$router.replace('/');
-    }
-    // 스토어가 로딩 중이라면 watch에서 처리될 때까지 기다림
-    // -----------------------------------
-  }
-};
-</script>
-
 <style scoped>
+:root {
+  --primary-color: #2d3748;
+  --accent-color: #4a5568;
+  --light-gray: #e2e8f0;
+  --medium-gray: #a0aec0;
+  --dark-gray: #4a5568;
+  --error-color: #e53e3e;
+  --border-radius: 4px;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --transition: all 0.2s ease;
+}
+
 .set-nickname-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 80vh; /* 최소 높이 */
+  min-height: 80vh;
   padding: 20px;
-  background-color: #f5f5f5; /* 로그인 페이지와 유사한 배경 */
+  background-color: #f8fafc;
 }
 
 .set-nickname-wrapper {
   background-color: white;
-  padding: 30px 40px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 32px;
+  border-radius: var(--border-radius);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   width: 100%;
-  max-width: 450px;
+  max-width: 480px;
+  box-sizing: border-box;
+}
+
+.nickname-header {
   text-align: center;
+  margin-bottom: 24px;
 }
 
-h2 {
-  margin-bottom: 10px;
-  font-size: 22px;
-  color: #333;
+.nickname-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: 8px;
+  letter-spacing: -0.5px;
 }
 
-p {
-  margin-bottom: 25px;
-  color: #666;
-  font-size: 14px;
+.nickname-subtitle {
+  font-size: 16px;
+  color: var(--accent-color);
+  line-height: 1.4;
+  margin: 0;
 }
 
 .form-group {
   margin-bottom: 20px;
-  text-align: left; /* 레이블, 인풋 왼쪽 정렬 */
+  text-align: left;
 }
 
 .form-group label {
   display: block;
   font-size: 14px;
-  color: #333;
-  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--dark-gray);
+  margin-bottom: 6px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  box-sizing: border-box; /* 패딩 포함 너비 계산 */
+  padding: 12px;
+  border: 1px solid var(--light-gray);
+  border-radius: var(--border-radius);
+  font-size: 15px;
+  box-sizing: border-box;
+  transition: var(--transition);
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--dark-gray);
+  box-shadow: 0 0 0 2px rgba(74, 85, 104, 0.1);
+}
+
+.info-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--medium-gray);
 }
 
 .error-message {
-  color: red;
+  color: var(--error-color);
   font-size: 13px;
-  text-align: left;
-  margin-top: 5px;
+  margin-top: 4px;
+  font-weight: 500;
 }
 
-.submit-btn {
+.error-message.server-error {
+  text-align: center;
+  margin: 12px 0;
+}
+
+.primary-btn {
   width: 100%;
   padding: 12px;
-  background-color: #007bff; /* 로그인 페이지와 유사한 스타일 */
+  background-color: var(--primary-color);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--border-radius);
   font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: var(--transition);
+  text-align: center;
+  letter-spacing: -0.3px;
+  margin-top: 8px;
 }
 
-.submit-btn:hover:not(:disabled) {
-  background-color: #0056b3;
+.primary-btn:hover:not(:disabled) {
+  background-color: #1a202c;
 }
 
-.submit-btn:disabled {
-  background-color: #cccccc;
+.primary-btn:disabled {
+  background-color: var(--medium-gray);
   cursor: not-allowed;
+}
+
+/* 반응형 조정 */
+@media (max-width: 576px) {
+  .set-nickname-wrapper {
+    padding: 24px;
+  }
 }
 </style>

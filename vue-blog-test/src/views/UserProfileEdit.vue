@@ -1,8 +1,11 @@
 <template>
-  <div class="user-profile-edit container mt-4">
+  <div class="user-profile-edit container">
     <h1>내 정보 수정</h1>
-    <div v-if="isLoading">로딩 중...</div>
-    <div v-else-if="user">
+    <div v-if="isLoading" class="loading-container">
+      <div class="loader"></div>
+      <span>로딩 중...</span>
+    </div>
+    <div v-else-if="user" class="content-container">
       <form @submit.prevent="submitForm" class="profile-form">
         <!-- 사용자 이름 (읽기 전용) -->
         <div class="form-group">
@@ -51,23 +54,28 @@
               class="form-control"
               placeholder="새 비밀번호를 입력하세요 (선택)"
           />
-          <small class="form-text text-muted">
+          <small class="form-text">
             비밀번호를 변경하지 않으려면 비워두세요.
           </small>
         </div>
 
+        <!-- 에러 메시지 표시 -->
+        <div v-if="serverError" class="error-message">
+          {{ serverError }}
+        </div>
+
         <!-- 제출 버튼 -->
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary" :disabled="isSubmitting">
+          <router-link class="btn btn-cancel" to="/">취소</router-link>
+          <button :disabled="isSubmitting" class="btn btn-save" type="submit">
             {{ isSubmitting ? '저장 중...' : '저장' }}
           </button>
-          <router-link to="/" class="btn btn-secondary ml-2">취소</router-link>
         </div>
       </form>
     </div>
-    <div v-else>
-      <h1>사용자 정보를 불러올 수 없습니다.</h1>
-      <router-link to="/" class="btn btn-primary">홈으로 돌아가기</router-link>
+    <div v-else class="error-container">
+      <h2>사용자 정보를 불러올 수 없습니다.</h2>
+      <router-link class="btn btn-home" to="/">홈으로 돌아가기</router-link>
     </div>
   </div>
 </template>
@@ -80,16 +88,13 @@ export default {
   name: 'UserProfileEdit',
   data() {
     return {
-      // --- 삭제: user 로컬 상태 ---
       formData: { // 폼 데이터
         username: '', // 사용자 ID (표시용, 수정 불가)
         email: '',    // 이메일 (표시용, 수정 불가)
         nickName: '', // 닉네임 (수정 가능)
         password: '', // 새 비밀번호 (로컬 사용자만 입력 가능)
-        // 필요한 다른 필드 추가
       },
       isLocalUser: false, // 로컬 계정 여부 (비밀번호 필드 표시 제어용)
-      // isLoading: true, // 로딩 상태는 스토어의 isLoadingUser 사용
       isSubmitting: false, // 폼 제출 중 상태
       serverError: '', // 서버 에러 메시지
     };
@@ -102,7 +107,6 @@ export default {
     siteType() {
       return this.currentUser?.site || 'UNKNOWN'; // 예: 'LOCAL', 'GOOGLE' 등
     }
-    // ----------------------------
   },
   watch: {
     // 스토어의 currentUser 상태 변경 감지하여 폼 데이터 업데이트
@@ -133,14 +137,9 @@ export default {
       }
     }
   },
-  // --- 삭제: created 훅 (loadUserData 호출 제거) ---
-  // watch immediate 옵션으로 대체됨
   methods: {
     // --- Vuex Actions 매핑 ---
     ...mapActions(['fetchCurrentUser']), // 사용자 정보 갱신용 액션
-    // ------------------------
-
-    // --- 삭제: loadUserData 메서드 ---
 
     // 폼 제출
     async submitForm() {
@@ -152,7 +151,6 @@ export default {
       if (!this.validateNickname()) return;
       // 예: 로컬 사용자이고 비밀번호 입력 시 유효성 검사
       if (this.isLocalUser && this.formData.password && !this.validatePassword()) return;
-
 
       this.isSubmitting = true;
       try {
@@ -195,7 +193,6 @@ export default {
       } catch (error) {
         console.error('정보 수정 실패:', error);
         this.serverError = error.response?.data?.message || '정보 수정 중 오류가 발생했습니다.';
-        // alert('정보 수정에 실패했습니다: ' + this.serverError); // 필요한 경우 alert
       } finally {
         this.isSubmitting = false;
       }
@@ -214,8 +211,6 @@ export default {
     // 닉네임 유효성 검사 (SetNickname과 유사)
     validateNickname() {
       const nickname = this.formData.nickName;
-      // ... (SetNickname의 validateInput 로직과 유사하게 구현) ...
-      // 예:
       if (!nickname || nickname.length < 2 || nickname.length > 15) {
         this.serverError = '닉네임은 2자 이상 15자 이하로 입력해주세요.';
         return false;
@@ -239,7 +234,6 @@ export default {
       }
       return true;
     }
-
   },
   // mounted에서 로그인 상태 확인 (선택적)
   mounted() {
@@ -255,101 +249,198 @@ export default {
 
 <style scoped>
 .user-profile-edit {
-  max-width: 600px;
-  margin: 0 auto;
+  max-width: 680px;
+  margin: 2rem auto;
+  padding: 0 1rem;
 }
 
 h1 {
   font-size: 1.75rem;
-  font-weight: 700;
+  font-weight: 600;
   margin-bottom: 2rem;
   text-align: center;
+  color: #333;
+  letter-spacing: 0.5px;
+}
+
+h2 {
+  font-size: 1.4rem;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+  color: #444;
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+  color: #666;
+}
+
+.loader {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #eee;
+  border-top: 3px solid #777;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.content-container {
+  width: 100%;
 }
 
 .profile-form {
   background-color: #fff;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  padding: 2.5rem;
+  border-radius: 4px;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eaeaea;
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.75rem;
 }
 
 .form-group label {
   display: block;
   font-weight: 500;
   margin-bottom: 0.5rem;
-  color: #333;
+  color: #444;
+  font-size: 0.95rem;
 }
 
 .form-control {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.75rem 1rem;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  transition: border-color 0.2s;
+  border-radius: 3px;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 
 .form-control:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 5px rgba(0, 123, 255, 0.3);
+  border-color: #999;
+  box-shadow: 0 0 0 2px rgba(153, 153, 153, 0.2);
 }
 
 .form-control:disabled {
   background-color: #f8f9fa;
-  color: #666;
+  color: #777;
+  cursor: not-allowed;
 }
 
 .form-text {
+  display: block;
+  margin-top: 0.5rem;
   font-size: 0.8rem;
-  color: #666;
+  color: #777;
+}
+
+.error-message {
+  background-color: #fff8f8;
+  color: #e74c3c;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1.5rem;
+  border-radius: 3px;
+  border-left: 3px solid #e74c3c;
+  font-size: 0.9rem;
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: 2rem;
+  gap: 0.75rem;
+  margin-top: 2.5rem;
 }
 
 .btn {
-  padding: 0.5rem 1.5rem;
+  padding: 0.75rem 1.5rem;
   font-size: 0.9rem;
   font-weight: 500;
-  border-radius: 4px;
+  border-radius: 3px;
   text-decoration: none;
-  transition: background-color 0.2s;
-}
-
-.btn-primary {
-  background-color: #007bff;
-  color: white;
+  transition: all 0.2s;
+  cursor: pointer;
+  text-align: center;
   border: none;
 }
 
-.btn-primary:hover {
-  background-color: #0056b3;
+.btn-save {
+  background-color: #555;
+  color: white;
 }
 
-.btn-primary:disabled {
-  background-color: #cccccc;
+.btn-save:hover {
+  background-color: #444;
+}
+
+.btn-save:disabled {
+  background-color: #999;
   cursor: not-allowed;
 }
 
-.btn-secondary {
-  background-color: #6c757d;
+.btn-cancel {
+  background-color: #f2f2f2;
+  color: #555;
+}
+
+.btn-cancel:hover {
+  background-color: #e8e8e8;
+}
+
+.btn-home {
+  background-color: #555;
   color: white;
-  border: none;
+  display: inline-block;
+  margin-top: 1rem;
 }
 
-.btn-secondary:hover {
-  background-color: #5a6268;
+.btn-home:hover {
+  background-color: #444;
 }
 
-.ml-2 {
-  margin-left: 0.5rem;
+.error-container {
+  text-align: center;
+  padding: 3rem 1rem;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+  border: 1px solid #eaeaea;
+}
+
+@media (max-width: 768px) {
+  .user-profile-edit {
+    max-width: 100%;
+    padding: 0 1rem;
+  }
+
+  .profile-form {
+    padding: 1.5rem;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .btn {
+    width: 100%;
+  }
 }
 </style>

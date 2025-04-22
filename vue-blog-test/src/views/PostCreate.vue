@@ -1,70 +1,67 @@
 <template>
-  <div class="post-create">
-    <div class="container">
-      <div class="post-create-content">
-        <div class="post-create-header">
-          <h1>새 게시글 작성</h1>
-        </div>
+  <div class="post-editor">
+    <div class="post-editor__container">
+      <div class="post-editor__header">
+        <h1>새 게시글 작성</h1>
+      </div>
 
-        <div v-if="isLoading" class="loading-state">
-          <span>로딩 중...</span>
-        </div>
+      <div v-if="isLoading" class="post-editor__loading">
+        <span>로딩 중...</span>
+      </div>
 
-        <div v-else class="post-form-container">
-          <form @submit.prevent="createPost" class="post-form">
-            <div class="form-group">
-              <label for="menuSelect" class="form-label">메뉴 선택 (필수)</label>
-              <select id="menuSelect" v-model="newPost.menuId" class="form-control" required>
-                <option disabled style="display: none;" value="">메뉴를 선택하세요</option>
-                <option v-for="menu in allMenus" :key="menu.id" :disabled="isParentMenu(menu.id)" :value="menu.id">
-                  {{ menu.name }}
-                </option>
-              </select>
-            </div>
+      <div v-else class="post-editor__form">
+        <form @submit.prevent="createPost">
+          <div class="form-group">
+            <label for="menuSelect">메뉴 선택</label>
+            <select id="menuSelect" v-model="newPost.menuId" required>
+              <option disabled value="">메뉴를 선택하세요</option>
+              <option v-for="menu in allMenus" :key="menu.id"
+                      :disabled="isParentMenu(menu.id)" :value="menu.id">
+                {{ menu.name }}
+              </option>
+            </select>
+          </div>
 
-            <div class="form-group">
-              <label for="postTitle" class="form-label">제목</label>
-              <input
-                  v-model="newPost.title"
-                  class="form-control"
-                  id="postTitle"
-                  required
-                  placeholder="게시글 제목을 입력하세요"
-              />
-            </div>
+          <div class="form-group">
+            <label for="postTitle">제목</label>
+            <input
+                id="postTitle"
+                v-model="newPost.title"
+                placeholder="게시글 제목을 입력하세요"
+                required
+            />
+          </div>
 
-            <div class="form-group">
-              <label for="postContent" class="form-label">내용</label>
-              <QuillEditor
-                  ref="quillEditorRef"
-                  v-model:content="newPost.content"
-                  :toolbar="toolbarOptions"
-                  contentType="html"
-                  placeholder="게시글 내용을 작성하세요"
-                  style="min-height: 250px; background-color: #f8f9fa;"
-                  theme="snow"
-                  id="postContent"
-                  @ready="onEditorReady"
-              />
-            </div>
+          <div class="form-group">
+            <label for="postContent">내용</label>
+            <QuillEditor
+                id="postContent"
+                ref="quillEditorRef"
+                v-model:content="newPost.content"
+                :toolbar="toolbarOptions"
+                contentType="html"
+                placeholder="게시글 내용을 작성하세요"
+                theme="snow"
+                @ready="onEditorReady"
+            />
+          </div>
 
-            <div class="form-actions">
-              <button
-                  type="submit"
-                  class="btn btn-primary"
-                  :disabled="isPosting"
-              >
-                {{ isPosting ? '작성 중...' : '작성하기' }}
-              </button>
-              <router-link
-                  :to="`/${blogUrl}`"
-                  class="btn btn-secondary"
-              >
-                취소
-              </router-link>
-            </div>
-          </form>
-        </div>
+          <div class="form-actions">
+            <button
+                :disabled="isPosting"
+                class="btn btn-primary"
+                type="submit"
+            >
+              {{ isPosting ? '작성 중...' : '작성하기' }}
+            </button>
+            <router-link
+                :to="`/${blogUrl}`"
+                class="btn btn-secondary"
+            >
+              취소
+            </router-link>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -350,206 +347,155 @@ export default {
 </script>
 
 <style scoped>
-/* 전체 스타일 */
-.post-create {
-  background-color: #f8f9fa;
+.post-editor {
+  background-color: #f9f9f9;
   min-height: 100vh;
+  padding: 40px 0;
+}
+
+.post-editor__container {
+  max-width: 900px;
+  margin: 0 auto;
+  background-color: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.post-editor__header {
+  padding: 28px 40px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.post-editor__header h1 {
+  font-size: 24px;
+  font-weight: 600;
   color: #333;
+  margin: 0;
 }
 
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 2rem;
-}
-
-.post-create-content {
-  background-color: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
-}
-
-.post-create-header {
-  margin-bottom: 2rem;
+.post-editor__loading {
+  padding: 60px 0;
   text-align: center;
+  color: #666;
+  font-size: 16px;
 }
 
-.post-create-header h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #000;
-  border-bottom: 2px solid #000;
-  padding-bottom: 0.5rem;
-}
-
-.loading-state {
-  text-align: center;
-  padding: 2rem;
-  font-size: 1.2rem;
-}
-
-.post-form-container {
-  max-width: 700px;
-  margin: 0 auto;
+.post-editor__form {
+  padding: 40px;
 }
 
 .form-group {
-  margin-bottom: 1.5rem;
+  margin-bottom: 30px;
 }
 
-.form-label {
+.form-group label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 600;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
 }
 
-.form-control {
+.form-group input,
+.form-group select {
   width: 100%;
-  padding: 0.75rem 1rem;
-  border: 1px solid #ddd;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
   border-radius: 4px;
-  font-size: 1rem;
-  background-color: #f8f9fa;
-  transition: border-color 0.3s ease;
-  box-sizing: border-box;
+  font-size: 15px;
+  transition: border-color 0.2s;
+  background-color: #fff;
 }
 
-.form-control:focus {
+.form-group input:focus,
+.form-group select:focus {
   outline: none;
-  border-color: #000;
+  border-color: #808080;
 }
 
-.form-control::placeholder {
-  color: #888;
-}
-
-.form-control select {
+.form-group select {
   appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23333' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.75rem center;
-  background-size: 16px 12px;
-  padding-right: 2.5rem;
-}
-
-.form-control::-ms-expand {
-  display: none;
-}
-
-/* 부모 메뉴 비활성화 시 스타일 (옵션) */
-.form-control option:disabled {
-  color: #aaa;
-  background-color: #eee;
+  background-position: right 16px center;
+  padding-right: 40px;
 }
 
 .form-actions {
   display: flex;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 2rem;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .btn {
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
+  padding: 12px 24px;
   border-radius: 4px;
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  text-align: center;
-  font-size: 1rem;
-  border: 1px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s;
+  border: none;
 }
 
 .btn-primary {
-  background-color: #000;
+  background-color: #4a4a4a;
   color: white;
-  border-color: #000;
+}
+
+.btn-primary:hover {
+  background-color: #333333;
 }
 
 .btn-primary:disabled {
-  opacity: 0.5;
+  background-color: #c0c0c0;
   cursor: not-allowed;
 }
 
 .btn-secondary {
-  background-color: #f8f9fa;
-  color: #000;
-  border: 1px solid #000;
+  background-color: #e9e9e9;
+  color: #4a4a4a;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn-secondary:hover {
-  background-color: #e2e6ea;
+  background-color: #d9d9d9;
 }
 
-/* Quill 관련 스타일 */
-.form-group .ql-toolbar.ql-snow {
+/* Quill 에디터 스타일 */
+:deep(.ql-toolbar.ql-snow) {
+  border: 1px solid #e0e0e0;
   border-top-left-radius: 4px;
   border-top-right-radius: 4px;
-  border: 1px solid #ddd;
-  border-bottom: 0;
-  background-color: #f8f9fa;
-  padding: 8px;
-  box-sizing: border-box;
+  background-color: #f7f7f7;
 }
 
-.form-group .ql-container.ql-snow {
+:deep(.ql-container.ql-snow) {
+  border: 1px solid #e0e0e0;
+  border-top: none;
   border-bottom-left-radius: 4px;
   border-bottom-right-radius: 4px;
-  border: 1px solid #ddd;
-  box-sizing: border-box;
+  min-height: 300px;
 }
 
-.form-group .ql-editor {
-  min-height: 250px;
-  background-color: white;
-  font-size: 1rem;
-  line-height: 1.6;
-  padding: 12px 15px;
-  box-sizing: border-box;
+:deep(.ql-editor) {
+  min-height: 300px;
 }
 
-.form-group .ql-container.ql-snow:focus-within {
-  border-color: #000;
-}
-
-.form-group .ql-snow .ql-picker-label {
-  font-size: 14px;
-}
-
-.form-group .ql-snow .ql-stroke {
-  stroke: #444;
-}
-
-.form-group .ql-snow .ql-fill {
-  fill: #444;
-}
-
-/* 반응형 스타일 */
-@media (max-width: 768px) {
-  .container {
-    padding: 1rem;
+/* 반응형 조정 */
+@media (max-width: 960px) {
+  .post-editor__container {
+    margin: 0 20px;
   }
 
-  .post-create-content {
-    padding: 1.5rem;
-  }
-
-  .post-create-header h1 {
-    font-size: 2rem;
-  }
-
-  .form-actions {
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .btn {
-    width: 100%;
+  .post-editor__header,
+  .post-editor__form {
+    padding: 20px;
   }
 }
 </style>

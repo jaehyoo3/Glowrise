@@ -1,43 +1,74 @@
 <template>
-  <div class="post-edit container mt-4">
-    <h1>게시글 수정</h1>
-    <div v-if="isLoading">로딩 중...</div>
-    <div v-else-if="post">
-      <form @submit.prevent="updatePost">
-        <div class="form-group">
-          <label for="menuSelect">메뉴 선택 (필수)</label>
-          <select v-model="editedPost.menuId" class="form-control" id="menuSelect" required>
-            <option value="" disabled>메뉴를 선택하세요</option>
-            <option
-                v-for="menu in allMenus"
-                :key="menu.id"
-                :value="menu.id"
-                :disabled="isParentMenu(menu.id)"
-            >
-              {{ menu.name }} {{ menu.parentId ? `(하위: ${getParentName(menu.parentId)})` : '' }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="postTitle">제목</label>
-          <input v-model="editedPost.title" class="form-control" id="postTitle" required/>
-        </div>
-        <div class="form-group">
-          <label for="postContent">내용</label>
-          <textarea v-model="editedPost.content" class="form-control" id="postContent" required></textarea>
-        </div>
-        <div class="form-group">
-          <label for="postFiles">첨부 파일</label>
-          <input type="file" multiple class="form-control" id="postFiles" @change="handleFileChange"/>
-          <p v-if="post.fileIds && post.fileIds.length > 0">현재 파일: {{ post.fileIds.length }}개</p>
-        </div>
-        <button type="submit" class="btn btn-primary mt-2" :disabled="isUpdating">수정하기</button>
-        <router-link :to="`/${blogUrl}/${menuId}/${postId}`" class="btn btn-secondary mt-2 ml-2">취소</router-link>
-      </form>
-    </div>
-    <div v-else>
-      <h1>게시글을 찾을 수 없습니다.</h1>
-      <router-link to="/" class="btn btn-primary">홈으로 돌아가기</router-link>
+  <div class="post-editor">
+    <div class="post-editor__container">
+      <div class="post-editor__header">
+        <h1>게시글 수정</h1>
+      </div>
+
+      <div v-if="isLoading" class="post-editor__loading">
+        <span>로딩 중...</span>
+      </div>
+
+      <div v-else-if="post" class="post-editor__form">
+        <form @submit.prevent="updatePost">
+          <div class="form-group">
+            <label for="menuSelect">메뉴 선택</label>
+            <select id="menuSelect" v-model="editedPost.menuId" required>
+              <option disabled value="">메뉴를 선택하세요</option>
+              <option
+                  v-for="menu in allMenus"
+                  :key="menu.id"
+                  :disabled="isParentMenu(menu.id)"
+                  :value="menu.id"
+              >
+                {{ menu.name }}
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="postTitle">제목</label>
+            <input id="postTitle" v-model="editedPost.title" required/>
+          </div>
+
+          <div class="form-group">
+            <label for="postContent">내용</label>
+            <QuillEditor
+                id="postContent"
+                ref="quillEditorRef"
+                v-model:content="editedPost.content"
+                :toolbar="toolbarOptions"
+                contentType="html"
+                theme="snow"
+                @ready="onEditorReady"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="postFiles">첨부 파일</label>
+            <div class="file-upload">
+              <input id="postFiles" multiple type="file" @change="handleFileChange"/>
+              <div v-if="post.fileIds && post.fileIds.length > 0" class="file-upload__info">
+                현재 파일: {{ post.fileIds.length }}개
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button :disabled="isUpdating" class="btn btn-primary" type="submit">
+              {{ isUpdating ? '수정 중...' : '수정하기' }}
+            </button>
+            <router-link :to="`/${blogUrl}/${menuId}/${postId}`" class="btn btn-secondary">
+              취소
+            </router-link>
+          </div>
+        </form>
+      </div>
+
+      <div v-else class="post-editor__not-found">
+        <h2>게시글을 찾을 수 없습니다.</h2>
+        <router-link class="btn btn-secondary" to="/">홈으로 돌아가기</router-link>
+      </div>
     </div>
   </div>
 </template>
@@ -218,29 +249,184 @@ export default {
 </script>
 
 <style scoped>
-.post-edit {
-  max-width: 800px;
+.post-editor {
+  background-color: #f9f9f9;
+  min-height: 100vh;
+  padding: 40px 0;
+}
+
+.post-editor__container {
+  max-width: 900px;
   margin: 0 auto;
+  background-color: #ffffff;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.post-editor__header {
+  padding: 28px 40px;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.post-editor__header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+.post-editor__loading {
+  padding: 60px 0;
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+}
+
+.post-editor__form {
+  padding: 40px;
+}
+
+.post-editor__not-found {
+  padding: 60px 40px;
+  text-align: center;
+}
+
+.post-editor__not-found h2 {
+  margin-bottom: 20px;
+  color: #555;
 }
 
 .form-group {
-  margin-bottom: 20px;
+  margin-bottom: 30px;
 }
 
-.form-control {
+.form-group label {
+  display: block;
+  margin-bottom: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #555;
+}
+
+.form-group input,
+.form-group select {
   width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 15px;
+  transition: border-color 0.2s;
+  background-color: #fff;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #808080;
+}
+
+.form-group select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23555' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 40px;
+}
+
+.file-upload {
+  position: relative;
+}
+
+.file-upload input[type="file"] {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background-color: #f7f7f7;
+  cursor: pointer;
+}
+
+.file-upload__info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #666;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 40px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
 }
 
 .btn {
-  margin-right: 10px;
+  padding: 12px 24px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
 }
 
-.ml-2 {
-  margin-left: 10px;
+.btn-primary {
+  background-color: #4a4a4a;
+  color: white;
 }
 
-#menuSelect option:disabled {
-  color: #888;
-  font-style: italic;
+.btn-primary:hover {
+  background-color: #333333;
+}
+
+.btn-primary:disabled {
+  background-color: #c0c0c0;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #e9e9e9;
+  color: #4a4a4a;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-secondary:hover {
+  background-color: #d9d9d9;
+}
+
+/* Quill 에디터 스타일 */
+:deep(.ql-toolbar.ql-snow) {
+  border: 1px solid #e0e0e0;
+  border-top-left-radius: 4px;
+  border-top-right-radius: 4px;
+  background-color: #f7f7f7;
+}
+
+:deep(.ql-container.ql-snow) {
+  border: 1px solid #e0e0e0;
+  border-top: none;
+  border-bottom-left-radius: 4px;
+  border-bottom-right-radius: 4px;
+  min-height: 300px;
+}
+
+:deep(.ql-editor) {
+  min-height: 300px;
+}
+
+/* 반응형 조정 */
+@media (max-width: 960px) {
+  .post-editor__container {
+    margin: 0 20px;
+  }
+
+  .post-editor__header,
+  .post-editor__form {
+    padding: 20px;
+  }
 }
 </style>

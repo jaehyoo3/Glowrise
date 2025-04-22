@@ -35,6 +35,8 @@ public class MenuService {
 
         Menu menu = menuMapper.toEntity(dto);
 
+        menu.setBlog(blog);
+
         if (dto.getParentId() != null) {
             Menu parent = findMenuByIdOrThrow(dto.getParentId());
             validateParentMenu(parent, blog.getId());

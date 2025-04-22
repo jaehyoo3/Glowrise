@@ -1,5 +1,6 @@
 <template>
-  <div class="search-results-page container"><h1><span class="query-highlight">'{{ currentQuery }}'</span> 검색 결과</h1>
+  <div class="search-results-page container">
+    <h1>검색 결과: <span class="query-highlight">'{{ currentQuery }}'</span></h1>
 
     <div v-if="loading" class="status-message loading">
       <p>결과를 불러오는 중입니다...</p>
@@ -16,7 +17,11 @@
 
     <div v-else class="results-container">
       <section class="results-section posts-section">
-        <h2>게시글 <span class="count">({{ postPageInfo.totalElements }}건)</span></h2>
+        <div class="section-header">
+          <h2>게시글</h2>
+          <span class="count">{{ postPageInfo.totalElements }}건</span>
+        </div>
+
         <ul v-if="results.posts?.content?.length" class="result-list">
           <li v-for="post in results.posts.content" :key="post.id" class="result-item post-item">
             <router-link :to="{ name: 'postDetail', params: { id: post.id } }" class="item-link">
@@ -30,28 +35,42 @@
           </li>
         </ul>
         <p v-else class="no-section-results">일치하는 게시글이 없습니다.</p>
+
         <div v-if="postPageInfo.totalPages > 1" class="pagination">
-          <button :disabled="postPageInfo.first" @click="goToPage(postPageInfo.number - 1)">이전</button>
+          <button :disabled="postPageInfo.first" class="pagination-btn prev" @click="goToPage(postPageInfo.number - 1)">
+            이전
+          </button>
           <span>페이지 {{ postPageInfo.number + 1 }} / {{ postPageInfo.totalPages }}</span>
-          <button :disabled="postPageInfo.last" @click="goToPage(postPageInfo.number + 1)">다음</button>
+          <button :disabled="postPageInfo.last" class="pagination-btn next" @click="goToPage(postPageInfo.number + 1)">
+            다음
+          </button>
         </div>
       </section>
 
       <section class="results-section users-section">
-        <h2>계정 <span class="count">({{ userPageInfo.totalElements }}건)</span></h2>
+        <div class="section-header">
+          <h2>계정</h2>
+          <span class="count">{{ userPageInfo.totalElements }}건</span>
+        </div>
+
         <ul v-if="results.users?.content?.length" class="result-list">
           <li v-for="user in results.users.content" :key="user.id" class="result-item user-item">
-            <p class="user-info">
+            <div class="user-info">
               <span class="user-nickname">{{ user.nickname }}</span>
-              (<span class="user-email">{{ user.email }}</span>)
-            </p>
+              <span class="user-email">{{ user.email }}</span>
+            </div>
           </li>
         </ul>
         <p v-else class="no-section-results">일치하는 계정이 없습니다.</p>
+
         <div v-if="userPageInfo.totalPages > 1" class="pagination">
-          <button :disabled="userPageInfo.first" @click="goToPage(userPageInfo.number - 1)">이전</button>
+          <button :disabled="userPageInfo.first" class="pagination-btn prev" @click="goToPage(userPageInfo.number - 1)">
+            이전
+          </button>
           <span>페이지 {{ userPageInfo.number + 1 }} / {{ userPageInfo.totalPages }}</span>
-          <button :disabled="userPageInfo.last" @click="goToPage(userPageInfo.number + 1)">다음</button>
+          <button :disabled="userPageInfo.last" class="pagination-btn next" @click="goToPage(userPageInfo.number + 1)">
+            다음
+          </button>
         </div>
       </section>
     </div>
@@ -60,16 +79,11 @@
 
 <script setup>
 import {computed, onMounted, ref, watch} from 'vue';
-// useRoute 임포트 제거
 import {useRouter} from 'vue-router';
-import {searchIntegrated} from '@/services/searchService'; // API 서비스 임포트 경로 확인
+import {searchIntegrated} from '@/services/searchService';
 
-// useRoute() 호출 제거
-// const route = useRoute();
 const router = useRouter();
 
-// 컴포넌트 props 정의 (라우터에서 전달받음)
-// defineProps는 <script setup> 내에서 자동으로 사용 가능 (import 불필요)
 // eslint-disable-next-line no-undef
 const props = defineProps({
   query: {
@@ -82,7 +96,6 @@ const props = defineProps({
   }
 });
 
-// --- 나머지 반응형 상태 변수 및 함수 정의는 이전과 동일 ---
 const results = ref({posts: null, users: null});
 const postPageInfo = ref({number: 0, totalPages: 0, totalElements: 0, first: true, last: true});
 const userPageInfo = ref({number: 0, totalPages: 0, totalElements: 0, first: true, last: true});
@@ -99,7 +112,6 @@ const hasResults = computed(() => {
 });
 
 const fetchResults = async (queryToFetch, pageToFetch) => {
-  // ... (이전과 동일한 fetchResults 함수 내용) ...
   if (!queryToFetch) {
     results.value = {posts: null, users: null};
     postPageInfo.value = {number: 0, totalPages: 0, totalElements: 0, first: true, last: true};
@@ -132,7 +144,6 @@ const fetchResults = async (queryToFetch, pageToFetch) => {
 };
 
 const extractPageInfo = (pageData) => {
-  // ... (이전과 동일한 extractPageInfo 함수 내용) ...
   return {
     number: pageData.number,
     totalPages: pageData.totalPages,
@@ -143,14 +154,12 @@ const extractPageInfo = (pageData) => {
 };
 
 const goToPage = (page) => {
-  // ... (이전과 동일한 goToPage 함수 내용) ...
   if (page >= 0 && currentQuery.value) {
     router.push({name: 'search', query: {q: currentQuery.value, page: page}});
   }
 };
 
 const formatDate = (dateString) => {
-  // ... (이전과 동일한 formatDate 함수 내용) ...
   if (!dateString) return '';
   try {
     const date = new Date(dateString);
@@ -165,95 +174,107 @@ const formatDate = (dateString) => {
   }
 };
 
-// 컴포넌트 마운트 시 초기 검색 실행
 onMounted(() => {
-  // props에서 값을 읽어옴
   fetchResults(props.query, props.initialPage);
 });
 
-// 라우트 props(query 또는 initialPage)가 변경될 때마다 검색 다시 실행
 watch(
     () => [props.query, props.initialPage],
     ([newQuery, newPage]) => {
       fetchResults(newQuery, newPage);
     }
-    // immediate 옵션은 onMounted에서 초기 로딩을 하므로 제거해도 됨
 );
-
 </script>
 
 <style scoped>
-.container { /* 프로젝트의 기본 컨테이너 스타일 적용 */
+/* 기본 레이아웃 */
+.container {
   max-width: 1200px;
-  margin: 2rem auto;
-  padding: 0 1rem;
+  margin: 0 auto;
+  padding: 32px;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
 }
 
+/* 헤더 스타일 */
 h1 {
-  margin-bottom: 1.5rem;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 500;
+  margin-bottom: 24px;
+  color: #333;
+  letter-spacing: -0.5px;
 }
 
 .query-highlight {
-  color: #007bff; /* 검색어 강조 색상 */
+  color: #555;
+  font-weight: 600;
 }
 
+/* 상태 메시지 스타일 */
 .status-message {
   text-align: center;
-  padding: 2rem;
+  padding: 48px 0;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  margin: 24px 0;
+}
+
+.status-message p {
+  font-size: 16px;
   color: #666;
-  font-size: 1.1rem;
+  margin: 0;
 }
 
 .status-message.error {
-  color: #dc3545;
+  background-color: #fff0f0;
 }
 
 .error-detail {
-  font-size: 0.9em;
+  font-size: 14px;
   color: #888;
-  margin-top: 0.5rem;
+  margin-top: 8px;
 }
 
+/* 결과 컨테이너 */
 .results-container {
-  display: flex;
-  flex-direction: column; /* 기본 세로 배치, 화면 크면 가로 배치하도록 수정 가능 */
-  gap: 2rem; /* 섹션 간 간격 */
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 24px;
 }
 
-/* 반응형: 화면 너비가 충분할 때 가로 배치 */
-@media (min-width: 768px) {
-  .results-container {
-    flex-direction: row;
-  }
-
-  .results-section {
-    flex: 1; /* 가로 배치 시 동일한 너비 차지 */
-  }
-}
-
+/* 결과 섹션 스타일 */
 .results-section {
-  border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 1.5rem;
   background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 24px;
 }
 
-.results-section h2 {
-  font-size: 1.4rem;
-  margin-top: 0;
-  margin-bottom: 1rem;
-  padding-bottom: 0.8rem;
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
   border-bottom: 1px solid #eee;
+}
+
+.section-header h2 {
+  font-size: 20px;
+  font-weight: 500;
+  color: #333;
+  margin: 0;
+}
+
+.count {
+  background-color: #f2f2f2;
+  color: #666;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 14px;
   font-weight: 500;
 }
 
-.results-section h2 .count {
-  font-size: 0.9em;
-  color: #555;
-  font-weight: normal;
-}
-
+/* 결과 목록 */
 .result-list {
   list-style: none;
   padding: 0;
@@ -261,89 +282,133 @@ h1 {
 }
 
 .result-item {
-  padding: 1rem 0;
-  border-bottom: 1px dashed #eee;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s ease;
+}
+
+.result-item:hover {
+  background-color: #fafafa;
 }
 
 .result-item:last-child {
   border-bottom: none;
-  padding-bottom: 0;
 }
 
-.result-item .item-link {
+.item-link {
   text-decoration: none;
   color: inherit;
-}
-
-.result-item .item-link:hover .item-title {
-  color: #0056b3; /* 호버 시 제목 색상 변경 */
+  display: block;
 }
 
 .item-title {
-  font-size: 1.15rem;
-  margin-top: 0;
-  margin-bottom: 0.4rem;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0 0 8px 0;
   color: #333;
+  transition: color 0.2s ease;
 }
 
-.item-snippet, .user-info {
-  font-size: 0.95rem;
+.item-link:hover .item-title {
+  color: #555;
+}
+
+.item-snippet {
+  font-size: 15px;
   color: #555;
   line-height: 1.5;
-  margin-bottom: 0.5rem;
+  margin: 0 0 12px 0;
 }
 
 .item-meta {
-  font-size: 0.85rem;
+  display: flex;
+  font-size: 13px;
   color: #777;
 }
 
 .item-meta span {
-  margin-right: 1rem;
+  margin-right: 16px;
+}
+
+/* 유저 정보 스타일 */
+.user-item {
+  padding: 12px 0;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
 }
 
 .user-nickname {
+  font-size: 16px;
   font-weight: 500;
+  color: #333;
+  margin-bottom: 4px;
 }
 
 .user-email {
-  color: #666;
-}
-
-
-.no-section-results {
+  font-size: 14px;
   color: #777;
-  padding: 1rem 0;
 }
 
+/* 페이지네이션 */
 .pagination {
-  margin-top: 1.5rem;
-  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
 }
 
-.pagination button {
-  margin: 0 0.3rem;
-  padding: 0.5rem 1rem;
-  cursor: pointer;
-  border: 1px solid #ddd;
+.pagination-btn {
   background-color: #fff;
+  border: 1px solid #ddd;
+  color: #555;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 14px;
   border-radius: 4px;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
-.pagination button:hover:not(:disabled) {
-  background-color: #f0f0f0;
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f5f5f5;
+  border-color: #ccc;
 }
 
-.pagination button:disabled {
+.pagination-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .pagination span {
-  margin: 0 0.7rem;
-  color: #555;
-  font-size: 0.95rem;
+  margin: 0 16px;
+  color: #666;
+  font-size: 14px;
+}
+
+/* 결과 없음 */
+.no-section-results {
+  padding: 24px 0;
+  text-align: center;
+  color: #777;
+  font-size: 15px;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .results-container {
+    grid-template-columns: 1fr;
+  }
+
+  .container {
+    padding: 16px;
+  }
+
+  h1 {
+    font-size: 22px;
+  }
 }
 </style>

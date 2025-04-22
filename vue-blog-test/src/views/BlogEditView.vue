@@ -82,6 +82,15 @@
                     type="text"
                 >
               </div>
+              <div class="form-group">
+                <label for="parentMenu">상위 메뉴 (선택)</label>
+                <select id="parentMenu" v-model="newMenu.parentId" class="form-input">
+                  <option :value="null">-- 최상위 메뉴 --</option>
+                  <option v-for="menu in topLevelMenus" :key="menu.id" :value="menu.id">
+                    {{ menu.name }}
+                  </option>
+                </select>
+              </div>
               <button
                   :class="{ 'button-loading': isSaving }"
                   :disabled="isSaving || !newMenu.name"
@@ -193,12 +202,14 @@ export default defineComponent({
   computed: {
     ...mapState(['userBlog']),
     ...mapGetters(['userId', 'hasBlog']),
+    topLevelMenus() {
+      return this.menus.filter(menu => !menu.parentId);
+    }
   },
   watch: {
     userBlog: {
       handler(newUserBlog) {
         if (newUserBlog && !newUserBlog.notFound) {
-          console.log('BlogEditView: 스토어 userBlog 변경 감지', newUserBlog);
           this.blog.id = newUserBlog.id;
           this.blog.title = newUserBlog.title || '';
           this.blog.description = newUserBlog.description || '';
@@ -208,10 +219,11 @@ export default defineComponent({
           this.urlError = '';
           this.loadMenus();
         } else if (newUserBlog?.notFound) {
-          console.log('BlogEditView: 스토어 userBlog가 notFound 상태.');
           this.$router.replace('/blog/create');
         } else {
-          console.log('BlogEditView: 스토어 userBlog가 null 또는 로드되지 않음.');
+          this.blog.id = null;
+          this.newMenu.blogId = null;
+          this.menus = [];
         }
       },
       immediate: true
@@ -290,7 +302,12 @@ export default defineComponent({
               name: menu.name || '',
               orderIndex: menu.orderIndex ?? 0,
               parentId: menu.parentId || null,
-            })).sort((a, b) => a.orderIndex - b.orderIndex)
+            })).sort((a, b) => {
+              // Sort by parentId first (nulls first), then by orderIndex
+              const parentCompare = (a.parentId === null ? -1 : a.parentId) - (b.parentId === null ? -1 : b.parentId);
+              if (parentCompare !== 0) return parentCompare;
+              return a.orderIndex - b.orderIndex;
+            })
             : [];
       } catch (error) {
         console.error('Failed to load menus:', error);
@@ -301,24 +318,37 @@ export default defineComponent({
     },
 
     async addMenu() {
-      if (!this.newMenu.name || !this.newMenu.blogId) {
+      if (!this.newMenu.name) {
         alert('메뉴 이름을 입력해주세요.');
+        return;
+      }
+      if (!this.newMenu.blogId) {
+        alert('블로그 정보를 먼저 로드해주세요.');
         return;
       }
       this.isSaving = true;
       try {
-        this.newMenu.orderIndex = this.menus.length;
+        const siblingMenus = this.menus.filter(m => m.parentId === this.newMenu.parentId);
+        this.newMenu.orderIndex = siblingMenus.length;
+
         const createdMenu = await authService.createMenu(this.newMenu);
 
         this.menus.push({
           id: createdMenu.id,
           name: createdMenu.name || this.newMenu.name,
-          orderIndex: createdMenu.orderIndex ?? this.menus.length - 1,
+          orderIndex: createdMenu.orderIndex ?? siblingMenus.length,
           parentId: createdMenu.parentId || this.newMenu.parentId,
         });
 
         this.newMenu.name = '';
         this.newMenu.parentId = null;
+
+        this.menus.sort((a, b) => {
+          const parentCompare = (a.parentId === null ? -1 : a.parentId) - (b.parentId === null ? -1 : b.parentId);
+          if (parentCompare !== 0) return parentCompare;
+          return a.orderIndex - b.orderIndex;
+        });
+
       } catch (error) {
         console.error('Menu addition failed:', error.response?.data || error.message);
         alert('메뉴 추가 실패: ' + (error.response?.data?.message || error.message));
@@ -332,9 +362,6 @@ export default defineComponent({
       if (oldIndex === newIndex) return;
 
       this.orderChanged = true;
-
-      const movedItem = this.menus.splice(oldIndex, 1)[0];
-      this.menus.splice(newIndex, 0, movedItem);
 
       this.menus.forEach((menu, idx) => {
         menu.orderIndex = idx;
@@ -358,6 +385,7 @@ export default defineComponent({
       } catch (error) {
         console.error('Failed to update menu order:', error.response?.data || error.message);
         alert('메뉴 순서 저장 실패: ' + (error.response?.data?.message || error.message));
+        await this.loadMenus();
       } finally {
         this.isSaving = false;
       }
@@ -429,7 +457,19 @@ export default defineComponent({
   font-size: 0.95rem;
   transition: all 0.2s ease;
   background-color: white;
+  height: 45px; /* Consistent height */
+  box-sizing: border-box; /* Include padding and border in element's total width and height */
 }
+
+select.form-input {
+  appearance: none; /* For custom arrow, if needed */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1em;
+  padding-right: 2.5rem; /* Space for arrow */
+}
+
 
 .form-input:focus {
   outline: none;
@@ -458,6 +498,7 @@ export default defineComponent({
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   overflow: hidden;
+  height: 45px; /* Consistent height */
 }
 
 .url-prefix {
@@ -467,12 +508,16 @@ export default defineComponent({
   font-size: 0.95rem;
   white-space: nowrap;
   border-right: 1px solid #e0e0e0;
+  height: 100%;
+  display: flex;
+  align-items: center;
 }
 
 .url-input {
   border: none;
   border-radius: 0;
   flex: 1;
+  height: 100%;
 }
 
 .url-input:focus {
@@ -535,6 +580,7 @@ export default defineComponent({
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  height: 48px; /* Slightly taller button */
 }
 
 .submit-button:hover:not(:disabled) {
@@ -553,7 +599,6 @@ export default defineComponent({
   cursor: wait;
 }
 
-/* 메뉴 관리 섹션 */
 .menu-management {
   margin-top: 3rem;
   border-top: 1px solid #eaeaea;
@@ -577,27 +622,40 @@ export default defineComponent({
 
 .menu-add-form {
   display: flex;
+  flex-wrap: wrap; /* Allow wrapping on smaller screens */
   gap: 1rem;
   align-items: flex-end;
 }
 
 .menu-add-form .form-group {
   flex-grow: 1;
-  margin-bottom: 0;
+  margin-bottom: 0; /* Remove default margin within the flex container */
+  min-width: 150px; /* Prevent inputs from becoming too small */
+}
+
+/* Adjust flex basis for better distribution */
+.menu-add-form .form-group:nth-child(1) { /* Name input */
+  flex-basis: 40%;
+}
+
+.menu-add-form .form-group:nth-child(2) { /* Parent select */
+  flex-basis: 35%;
 }
 
 .add-menu-button {
   background-color: #fff;
   color: #1a1a1a;
   border: 1px solid #1a1a1a;
-  padding: 0.8rem 1.5rem;
+  padding: 0 1.5rem; /* Adjust padding */
   border-radius: 8px;
   font-weight: 600;
   font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
-  height: 45px;
+  height: 45px; /* Match input height */
+  flex-shrink: 0; /* Prevent button from shrinking */
+  margin-top: auto; /* Align button nicely if wrapped */
 }
 
 .add-menu-button:hover:not(:disabled) {
@@ -670,7 +728,7 @@ export default defineComponent({
 }
 
 .menu-item.sub-menu .menu-item-content {
-  margin-left: 1.5rem;
+  margin-left: 1.5rem; /* Indent sub-menus */
   background-color: #f0f7ff;
   border-color: #d1e3ff;
 }
@@ -709,7 +767,6 @@ export default defineComponent({
   cursor: not-allowed;
 }
 
-/* 로딩 및 빈 상태 */
 .loading-state, .empty-state {
   display: flex;
   flex-direction: column;
@@ -769,12 +826,20 @@ export default defineComponent({
 
   .menu-add-form {
     flex-direction: column;
+    align-items: stretch; /* Stretch items to full width */
     gap: 1rem;
   }
 
+  .menu-add-form .form-group {
+    flex-basis: auto; /* Reset flex basis on smaller screens */
+    min-width: 0; /* Reset min-width */
+  }
+
+
   .add-menu-button {
     width: 100%;
-    height: auto;
+    height: 45px; /* Match input height */
+    margin-top: 0; /* Reset margin */
   }
 }
 </style>
